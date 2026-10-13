@@ -45,8 +45,11 @@
       <div class="text-sm font-semibold text-gray-700">1. Data Pengantaran</div>
       <div>
         <label class="block text-sm font-medium text-gray-700">Kurir <span class="text-gray-400 font-normal">(opsional, bisa diisi nanti)</span></label>
-        <input id="kurir" list="kurirList" autocomplete="off" placeholder="Pilih dari daftar atau ketik nama kurir" class="w-full mt-1 p-3 border rounded-lg">
-        <datalist id="kurirList"></datalist>
+        <div id="kurirBox" class="relative mt-1">
+          <input id="kurir" autocomplete="off" placeholder="Pilih dari daftar atau ketik nama kurir" class="w-full p-3 pr-11 border rounded-lg">
+          <button type="button" id="kurirToggle" aria-label="Buka daftar kurir" class="absolute inset-y-0 right-0 px-3 text-gray-500">▼</button>
+          <div id="kurirMenu" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-56 overflow-y-auto"></div>
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">Kendaraan</label>
@@ -120,16 +123,23 @@
 
 <script>
 // ====== GANTI dengan URL Web App Apps Script Anda (yang berakhiran /exec) ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbzm-0-kpvg2OhLCoWsELAmFr3ijjKVQpEaVD-mGs6W2OfWmKfZ2vJt6IcyVHCcwXAWQ6g/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbynqfYzNe2J_oeLq2M9IAzjm6IPsZt5Ff84clIzkunXNN8WtT81fPBO3ApJEus3n1aK1Q/exec';
 
 // ====== DAFTAR KURIR & KENDARAAN (edit di sini; tidak membaca Google Drive sehingga langsung muncul) ======
 const KURIR = [
-  'Nama Kurir 1',
-  'Nama Kurir 2',
+  'Kristian',
+  'Wenly',
+  'Yosua',
+  'Wawan',
+  'Wahid',
+  'Andre',
+  'Icat',
 ];
 const KENDARAAN = [                     // plat + jenis kendaraan
-  { plat: 'DB 1234 KZ', jenis: 'Box' },
-  { plat: 'DB 5678 AB', jenis: 'Pickup' },
+  { plat: 'DN 8919 DY', jenis: 'MAE CARGO DOUBLE BAN' },
+  { plat: 'DB 8528 QL', jenis: 'MAE CARGO ENGKEL' },
+  { plat: 'B 9468 UXE', jenis: 'L300' },
+  { plat: 'DB 8196 LD', jenis: 'ENGKEL BAN JNE' },
 ];
 
 // Pengganti google.script.run supaya bisa jalan dari GitHub Pages
@@ -213,7 +223,6 @@ function setOptions(id, items, keep) {
   if (keep && items.some(o => o.v === keep)) s.value = keep;
 }
 function initMaster() {
-  $('kurirList').innerHTML = M.kurir.map(n => '<option value="' + esc(n) + '">').join('');
   setOptions('kendaraan', M.kendaraan.slice().sort((a, b) => a.plat.localeCompare(b.plat)).map(k => ({ v: k.plat, t: k.plat + ' - ' + k.jenis })), load('plat'));
   waktuManual = false; $('waktu').value = waktuNow();
   if (!M.kurir.length || !M.kendaraan.length) toast('Daftar kurir/kendaraan di index.html masih kosong.', false, 8000);
@@ -268,8 +277,26 @@ function renderTrip() {
     '</span><button onclick="removeItem(' + i + ')" class="text-red-600 text-xs underline ml-3">Hapus</button></span></div>').join('');
   $('counter').textContent = total + ' struk';
 }
-$('kurir').addEventListener('input', e => { if (trip) { trip.kurir = e.target.value.replace(/\s+/g, ' ').trim(); showInfo(); saveDraft(); } });
+$('kurir').addEventListener('input', e => { if (trip) { trip.kurir = e.target.value.replace(/\s+/g, ' ').trim(); showInfo(); saveDraft(); } kurirMenu(true, false); });
 $('kurir').addEventListener('change', e => { const v = nk(e.target.value); e.target.value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } });
+/* kurir: dropdown yang juga bisa diketik (opsional) */
+function setKurir(v) { v = nk(v); $('kurir').value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } }
+function kurirMenu(show, all) {                 // all = tampilkan seluruh daftar (tombol ▼); jika tidak, saring sesuai ketikan
+  const box = $('kurirMenu'); box.innerHTML = '';
+  if (!show) return box.classList.add('hidden');
+  const q = all ? '' : $('kurir').value.trim().toLowerCase();
+  const add = (label, val, extra) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+    b.className = 'block w-full text-left px-3 py-2 text-sm border-b last:border-b-0 hover:bg-gray-100 ' + (extra || '');
+    b.onclick = () => { setKurir(val); kurirMenu(false); }; box.appendChild(b);
+  };
+  M.kurir.filter(n => n.toLowerCase().includes(q)).forEach(n => add(n, n));
+  if (all && $('kurir').value) add('— Kosongkan kurir —', '', 'text-gray-500');
+  box.classList.toggle('hidden', !box.children.length);
+}
+$('kurirToggle').addEventListener('click', () => kurirMenu($('kurirMenu').classList.contains('hidden'), true));
+$('kurir').addEventListener('keydown', e => { if (e.key === 'Escape') kurirMenu(false); });
+document.addEventListener('pointerdown', e => { if (!$('kurirBox').contains(e.target)) kurirMenu(false); });
 $('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
 
 /* draft: daftar struk yang belum diupload disimpan di perangkat agar tidak hilang saat halaman ter-refresh */
