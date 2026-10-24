@@ -97,7 +97,7 @@
   </div>
 </div>
 
-<!-- KAMERA (preview ringan, OCR hanya berjalan saat tombol ditekan) -->
+<!-- KAMERA -->
 <div id="scanOverlay" class="hidden fixed inset-0 bg-black z-50 flex flex-col">
   <div class="flex justify-between items-center p-3 text-white">
     <span class="font-semibold">Foto Struk</span>
@@ -122,10 +122,9 @@
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm shadow-lg z-[60]"></div>
 
 <script>
-// ====== GANTI dengan URL Web App Apps Script Anda (yang berakhiran /exec) ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbzm-0-kpvg2OhLCoWsELAmFr3ijjKVQpEaVD-mGs6W2OfWmKfZ2vJt6IcyVHCcwXAWQ6g/exec';
+// ====== GANTI DENGAN URL WEB APP APPS SCRIPT BARU ANDA ======
+const API_URL = 'https://script.google.com/macros/s/AKfycbzC0CJiatEVvmZBF_bDbUK7kOxhRwOdxBeUOAgcDs2g1oPJ8btbrtZuNMf3_42QoV9Wjg/exec';
 
-// ====== DAFTAR KURIR & KENDARAAN (edit di sini; tidak membaca Google Drive sehingga langsung muncul) ======
 const KURIR = [
   'Kristian',
   'Wenly',
@@ -135,21 +134,20 @@ const KURIR = [
   'Andre',
   'Icat',
 ];
-const KENDARAAN = [                     // plat + jenis kendaraan
+const KENDARAAN = [
   { plat: 'DN 8919 DY', jenis: 'MAE CARGO DOUBLE BAN' },
   { plat: 'DB 8528 QL', jenis: 'MAE CARGO ENGKEL' },
   { plat: 'B 9468 UXE', jenis: 'L300' },
   { plat: 'DB 8196 LD', jenis: 'ENGKEL BAN JNE' },
 ];
 
-// Pengganti google.script.run supaya bisa jalan dari GitHub Pages
 const google = { script: { get run() { return makeRunner(); } } };
 function makeRunner(ok = () => {}, fail = () => {}) {
   return new Proxy({}, { get: (_, name) => {
     if (name === 'withSuccessHandler') return f => makeRunner(f, fail);
     if (name === 'withFailureHandler') return f => makeRunner(ok, f);
     return (...args) => {
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: name, args }) })   // text/plain: tanpa preflight CORS
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: name, args }) })
         .then(r => r.text())
         .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('SERVER: balasan bukan data. Pastikan deployment: Execute as Me, akses Anyone, URL /exec benar, dan sudah New version.'); } })
         .then(d => d.error ? fail(new Error(d.error)) : ok(d.data))
@@ -158,7 +156,6 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   } });
 }
 
-// Status server di halaman login
 (function () {
   const el = document.getElementById('srv');
   const set = (t, c) => { el.textContent = t; el.className = 'text-xs text-center ' + c; };
@@ -188,7 +185,6 @@ function beep() {
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 const load = k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } };
 
-/* login */
 function handleLogin() {
   const btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const u = $('username').value, p = $('password').value;
@@ -207,14 +203,12 @@ function handleLogin() {
 }
 ['username', 'password'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); }));
 
-/* data master (dari konstanta KURIR & KENDARAAN di atas) */
 const norm = s => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 const M = {
   kurir: [...new Set(KURIR.map(k => String(k).trim()).filter(Boolean))],
   kendaraan: KENDARAAN.map(k => ({ plat: norm(k.plat), jenis: String(k.jenis || '').trim() })).filter(k => k.plat && k.jenis)
 };
 const key = s => String(s || '').toUpperCase().replace(/\s+/g, '');
-// Nama kurir diketik bebas; jika cocok dengan daftar (beda huruf besar/kecil), pakai penulisan di daftar
 const nk = v => { v = String(v || '').replace(/\s+/g, ' ').trim(); return M.kurir.find(x => x.toLowerCase() === v.toLowerCase()) || v; };
 const findPlat = v => M.kendaraan.find(x => key(x.plat) === key(v));
 
@@ -229,12 +223,10 @@ function initMaster() {
   restoreDraft();
 }
 
-/* waktu otomatis: Pagi 05.00-10.59, Siang 11.00-17.59, Malam 18.00-04.59 */
 let waktuManual = false;
 function waktuNow() { const h = new Date().getHours(); return h >= 5 && h < 11 ? 'Pagi' : h >= 11 && h < 18 ? 'Siang' : 'Malam'; }
 $('waktu').addEventListener('change', () => { waktuManual = true; });
 
-/* langkah 1 & 2: pengantaran dan struk */
 let trip = null, saving = false;
 
 function startTrip() {
@@ -246,7 +238,7 @@ function startTrip() {
 }
 function enterTrip(t) {
   trip = t;
-  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);       // kurir tetap bisa diisi/diubah sampai upload
+  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);
   $('startBtn').classList.add('hidden'); $('stepQR').classList.remove('hidden');
   $('kurir').value = t.kurir || ''; $('deskripsi').value = t.deskripsi || '';
   showInfo(); renderTrip();
@@ -279,9 +271,8 @@ function renderTrip() {
 }
 $('kurir').addEventListener('input', e => { if (trip) { trip.kurir = e.target.value.replace(/\s+/g, ' ').trim(); showInfo(); saveDraft(); } kurirMenu(true, false); });
 $('kurir').addEventListener('change', e => { const v = nk(e.target.value); e.target.value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } });
-/* kurir: dropdown yang juga bisa diketik (opsional) */
 function setKurir(v) { v = nk(v); $('kurir').value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } }
-function kurirMenu(show, all) {                 // all = tampilkan seluruh daftar (tombol ▼); jika tidak, saring sesuai ketikan
+function kurirMenu(show, all) {
   const box = $('kurirMenu'); box.innerHTML = '';
   if (!show) return box.classList.add('hidden');
   const q = all ? '' : $('kurir').value.trim().toLowerCase();
@@ -299,7 +290,6 @@ $('kurir').addEventListener('keydown', e => { if (e.key === 'Escape') kurirMenu(
 document.addEventListener('pointerdown', e => { if (!$('kurirBox').contains(e.target)) kurirMenu(false); });
 $('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
 
-/* draft: daftar struk yang belum diupload disimpan di perangkat agar tidak hilang saat halaman ter-refresh */
 const draftKey = () => 'draft_' + U.trim().toLowerCase();
 function saveDraft() { if (trip && trip.items.length) store(draftKey(), JSON.stringify(trip)); else clearDraft(); }
 function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} }
@@ -327,7 +317,7 @@ async function addStruk() {
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '';
   try {
-    const r = await api('cekTrx', trxId);          // Trx Id yang sudah terupload di transaksi lain tidak boleh diinput lagi
+    const r = await api('cekTrx', trxId);
     if (r.found) {
       $('trxId').value = '';
       return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
@@ -353,7 +343,7 @@ async function uploadAll() {
   try {
     const f = { waktu: t.waktu, kurir: t.kurir, plat: t.plat, jenis: t.jenis, deskripsi: t.deskripsi || '', items: t.items };
     const r = await api('simpanBatch', f);
-    if (r.duplicate) {                              // buang struk yang sudah pernah terupload dari daftar, sisanya bisa diupload lagi
+    if (r.duplicate) {
       const bad = new Set(r.dups || []); t.items = t.items.filter(x => !bad.has(x.trxId));
       saveDraft(); renderTrip();
       return toast(r.message + ' Struk tersebut dihapus dari daftar, tekan Upload lagi untuk sisanya.', false, 9000);
@@ -367,7 +357,6 @@ async function uploadAll() {
 }
 $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
-/* ekstraksi Trx Id dari teks hasil OCR (toleran terhadap salah baca O/0, I/l/1) */
 function extractStruk(raw) {
   const t = String(raw || '').replace(/\r/g, '').replace(/\|/g, 'I');
   let trx = '', m = t.match(/Tr[xk]\s*[Il1!]d\s*[:;.,]*\s*([A-Za-z0-9]{4,20})/i) || t.match(/\b(TRX\s?[0-9OQIL]{3,})/i);
@@ -379,7 +368,6 @@ function extractStruk(raw) {
   return { trx };
 }
 
-/* kamera + OCR (Tesseract.js, dimuat hanya saat kamera dibuka; OCR berjalan hanya saat tombol ditekan) */
 let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null;
 const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
 const setStatus = t => { $('ocrStatus').textContent = t; };
@@ -412,7 +400,7 @@ function prepareOCR() {
   return ocrReady;
 }
 
-function grab() {                       // potong area di dalam kotak hijau, lalu skala ke lebar ±1400px
+function grab() {
   const v = $('cam'), vw = v.videoWidth, vh = v.videoHeight;
   if (!vw) return null;
   const sx = vw * 0.04, sy = vh * 0.12, sw = vw * 0.92, sh = vh * 0.76, k = Math.min(2, 1400 / sw);
@@ -420,7 +408,7 @@ function grab() {                       // potong area di dalam kotak hijau, lal
   ctx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
   return cv;
 }
-function preprocess(c) {                // abu-abu + perenggang kontras agar teks struk lebih tajam
+function preprocess(c) {
   const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
   for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = y; hist[y]++; }
   let acc = 0, lo = 0, hi = 255;
@@ -440,7 +428,7 @@ async function openScanner() {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     const v = $('cam'); v.srcObject = stream; await v.play();
-    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;       // kotak panduan = proporsi video agar crop akurat
+    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;
     w.style.aspectRatio = v.videoWidth + '/' + v.videoHeight; w.style.maxWidth = (68 * r) + 'vh';
   } catch (err) {
     closeScanner();
@@ -449,7 +437,7 @@ async function openScanner() {
   const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
   if (caps.torch) $('torchBtn').classList.remove('hidden');
   tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));   // siapkan di latar belakang
+  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));
 }
 function closeScanner() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -464,10 +452,10 @@ async function toggleTorch() {
 async function snap() {
   if (!stream || ocrBusy) return;
   const c = grab(); if (!c) return toast('Kamera belum siap, coba lagi.', false);
-  preprocess(c);                         // gambar hanya ada di memori (canvas), tidak disimpan/diunggah
+  preprocess(c);
   ocrBusy = true; $('camBtn').disabled = true;
   if (navigator.vibrate) navigator.vibrate(60);
-  closeScanner();                        // kamera langsung ditutup: struk boleh diturunkan
+  closeScanner();
   setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
   try {
     await prepareOCR();
@@ -479,10 +467,9 @@ async function snap() {
     beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
     if ($('autoSave').checked) addStruk(); else $('trxId').focus();
   } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
-  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }   // hapus gambar dari memori
+  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }
 }
 
-/* kelola user (main user) */
 function toggleAdmin() {
   const open = $('adminPanel').classList.contains('hidden');
   $('adminPanel').classList.toggle('hidden', !open); $('flow').classList.toggle('hidden', open);
