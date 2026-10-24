@@ -78,8 +78,8 @@
       <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Struk</button>
       <div id="ocrInfo" class="hidden bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm"></div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Trx Id</label>
-        <input id="trxId" autocomplete="off" autocapitalize="characters" placeholder="contoh: TRX202299" class="w-full mt-1 p-3 border rounded-lg font-mono uppercase">
+        <label class="block text-sm font-medium text-gray-700">Trx Id (7 Digit Angka)</label>
+        <input id="trxId" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="contoh: 2022991" class="w-full mt-1 p-3 border rounded-lg font-mono">
       </div>
       <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis jika Trx Id terbaca</label>
       <button id="addBtn" onclick="addStruk()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold">+ Tambah Struk</button>
@@ -313,9 +313,9 @@ let checking = false;
 async function addStruk() {
   if (!trip || checking) return;
   if (saving) return toast('Tunggu upload selesai.', false);
-  const trxId = $('trxId').value.trim().toUpperCase().replace(/\s+/g, '');
+  const trxId = $('trxId').value.trim();
   if (!trxId) return toast('Trx Id belum diisi.', false);
-  if (!/^[A-Z0-9._\/-]{3,40}$/.test(trxId)) return toast('Trx Id tidak valid (huruf/angka, 3-40 karakter).', false, 4000);
+  if (!/^\d{7}$/.test(trxId)) return toast('Trx Id tidak valid (harus persis 7 digit angka).', false, 4000);
   if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '';
@@ -358,17 +358,18 @@ async function uploadAll() {
   } catch (e) { toast(e.message || e, false, 6000); }
   finally { saving = false; if (trip) renderTrip(); }
 }
+
+// Membatasi ketikan manual agar HANYA ANGKA dan maksimal 7 DIGIT
+$('trxId').addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 7);
+});
 $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
+/* ekstraksi Trx Id dari teks hasil OCR (hanya angka 7 digit) */
 function extractStruk(raw) {
-  const t = String(raw || '').replace(/\r/g, '').replace(/\|/g, 'I');
-  let trx = '', m = t.match(/Tr[xk]\s*[Il1!]d\s*[:;.,]*\s*([A-Za-z0-9]{4,20})/i) || t.match(/\b(TRX\s?[0-9OQIL]{3,})/i);
-  if (m) {
-    trx = m[1].toUpperCase().replace(/\s+/g, '');
-    const p = trx.match(/^TRX[0-9OQIL]+/);
-    if (p) trx = 'TRX' + p[0].slice(3).replace(/[OQ]/g, '0').replace(/[IL]/g, '1');
-  }
-  return { trx };
+  const numbersOnly = String(raw || '').replace(/\D/g, '');
+  const match = numbersOnly.match(/\b\d{7}\b/) || numbersOnly.match(/\d{7}/);
+  return { trx: match ? match[0] : '' };
 }
 
 let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null;
@@ -465,7 +466,7 @@ async function snap() {
     setInfo('Membaca struk... 0%');
     const { data } = await worker.recognize(c);
     const r = extractStruk(data.text);
-    if (!r.trx) return toast('Trx Id tidak terbaca. Buka kamera lagi, dekatkan, dan perjelas cahaya.', false, 6000);
+    if (!r.trx) return toast('Trx Id 7 digit angka tidak ditemukan. Coba lagi atau ketik manual.', false, 6000);
     $('trxId').value = r.trx;
     beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
     if ($('autoSave').checked) addStruk(); else $('trxId').focus();
