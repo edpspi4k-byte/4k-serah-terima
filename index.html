@@ -110,7 +110,7 @@
   <div class="flex-1 flex items-center justify-center overflow-hidden">
     <div id="camWrap" class="relative w-full">
       <video id="cam" playsinline muted class="w-full h-full object-cover block"></video>
-      <div class="absolute inset-x-[4%] inset-y-[42%] border-2 border-green-400 rounded pointer-events-none"></div>
+      <div class="absolute inset-x-[4%] inset-y-[39%] border-2 border-green-400 rounded pointer-events-none"></div>
     </div>
   </div>
   <div class="p-4 space-y-2">
@@ -124,10 +124,10 @@
 
 <script>
 // ====== GANTI dengan URL Web App Apps Script Anda (yang berakhiran /exec) ======
-const API_URL = 'https://script.google.com/macros/s/AKfycby8or6ltHqVZK_nUqaAYdtSlie6_LziLuLNqe5Ay8IZDeBhb_Ex8n9A6GdxgyRBZvTc5Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzm-0-kpvg2OhLCoWsELAmFr3ijjKVQpEaVD-mGs6W2OfWmKfZ2vJt6IcyVHCcwXAWQ6g/exec';
 const MIN_SERVER_VERSION = 12;
 const TRX_DIGITS = 7;      // Trx Id = awalan huruf bebas + 7 angka; yang disimpan hanya 7 angka
-const FRAMES = 3;          // jumlah foto berurutan per pembacaan (konsensus)
+const FRAMES = 4;          // jumlah foto berurutan per pembacaan (konsensus)
 
 // ====== DAFTAR KURIR & KENDARAAN (edit di sini; tidak membaca Google Drive sehingga langsung muncul) ======
 const KURIR = [
@@ -394,26 +394,21 @@ $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.prevent
 /* ====== OCR: yang dicari hanya deret angka Trx Id. Awalan huruf diabaikan, huruf tidak pernah diubah jadi angka ======
    Satu bacaan menghasilkan: ok (tepat 7 angka) | bad (angka salah jumlah / lebih dari satu kode) | none */
 function extractTrx(raw) {
-  const toks = String(raw || '').toUpperCase().split(/[\s:]+/).filter(Boolean), pre = [], bare = [];
-  toks.forEach(t => {
-    let m = t.match(/^[A-Z]+(\d{4,})$/);               // huruf + angka menempel (TRX1234567, TR1234567, ...) = kode Trx Id
-    if (m) return pre.push(m[1]);
-    m = t.match(/^(\d{4,})$/);                          // deret angka berdiri sendiri (angka pendek <4 digit diabaikan)
-    if (m) bare.push(m[1]);
-  });
-  const uniq = [...new Set(pre.length ? pre : bare)];  // yang berawalan huruf didahulukan
+  const t = String(raw || '').toUpperCase(), re = /([A-Z]?)(\d{4,})/g, pre = [], bare = []; let m;
+  while ((m = re.exec(t))) (m[1] ? pre : bare).push(m[2]);   // huruf menempel di depan angka = kode Trx Id; angka <4 digit diabaikan
+  const uniq = [...new Set(pre.length ? pre : bare)];
   if (!uniq.length) return { s: 'none' };
   if (uniq.length === 1 && uniq[0].length === TRX_DIGITS) return { s: 'ok', d: uniq[0] };
   return { s: 'bad', list: uniq };                   // salah jumlah angka, atau terbaca beberapa kode berbeda
 }
-/* Konsensus: minimal 2 dari 3 foto harus menghasilkan 7 angka yang SAMA persis,
-   dan tidak boleh ada foto lain yang menghasilkan 7 angka berbeda. */
+/* Konsensus: 7 angka yang sama harus terbaca minimal 2 kali dan unggul atas bacaan 7 angka lainnya. */
 function consensus(reads) {
   const cnt = {};
   reads.forEach(r => { if (r.s === 'ok') cnt[r.d] = (cnt[r.d] || 0) + 1; });
-  const keys = Object.keys(cnt);
+  const keys = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+  if (keys.length && cnt[keys[0]] >= 2 && (keys.length === 1 || cnt[keys[0]] > cnt[keys[1]]))
+    return { s: 'ok', d: keys[0], all: cnt[keys[0]] === reads.length };
   if (keys.length > 1) return { s: 'conflict', list: keys };
-  if (keys.length === 1 && cnt[keys[0]] >= 2) return { s: 'ok', d: keys[0], all: cnt[keys[0]] === reads.length };
   const bad = [].concat(...reads.filter(r => r.s === 'bad').map(r => r.list));
   if (bad.length) return { s: 'bad', list: [...new Set(bad)] };
   return { s: 'weak' };
@@ -447,7 +442,7 @@ function prepareOCR() {
     }, { load_system_dawg: '0', load_freq_dawg: '0' });   // matikan kamus kata: lebih cepat & angka tidak "dikoreksi" jadi kata
     // Hanya karakter yang mungkin ada di baris "Trx Id : TRX1234567" yang boleh terbaca
     await worker.setParameters({
-      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
       tessedit_char_whitelist: 'TRXDtrxd: 0123456789',
       user_defined_dpi: '300',
       preserve_interword_spaces: '1'
@@ -457,10 +452,10 @@ function prepareOCR() {
   return ocrReady;
 }
 
-function grab() {                       // potong strip di dalam kotak hijau (lebar 92%, tinggi 16%), skala ke lebar ±1200px
+function grab() {                       // potong strip di dalam kotak hijau (lebar 92%, tinggi 22%), tidak diperkecil
   const v = $('cam'), vw = v.videoWidth, vh = v.videoHeight;
   if (!vw) return null;
-  const sx = vw * 0.04, sy = vh * 0.42, sw = vw * 0.92, sh = vh * 0.16, k = Math.min(1.5, 1200 / sw);
+  const sx = vw * 0.04, sy = vh * 0.39, sw = vw * 0.92, sh = vh * 0.22, k = Math.min(2, Math.max(1, 1400 / sw));   // jangan diperkecil: angka kecil makin sulit dibaca
   const c = document.createElement('canvas');
   c.width = Math.round(sw * k); c.height = Math.round(sh * k);
   c.getContext('2d', { willReadFrequently: true }).drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
@@ -471,10 +466,10 @@ function preprocess(c) {                // abu-abu + perenggang kontras agar tek
   const im = x.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
   for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = y; hist[y]++; }
   let acc = 0, lo = 0, hi = 255;
-  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.02) { lo = v; break; } }
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.003) { lo = v; break; } }
   acc = 0;
-  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.98) { hi = v; break; } }
-  const span = Math.max(1, hi - lo);
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.99) { hi = v; break; } }
+  const span = Math.max(40, hi - lo);        // kontras rendah: jangan diperbesar berlebihan
   for (let i = 0; i < d.length; i += 4) { let y = (d[i] - lo) * 255 / span; y = y < 0 ? 0 : y > 255 ? 255 : y; d[i] = d[i + 1] = d[i + 2] = y; }
   x.putImageData(im, 0, 0);
 }
@@ -514,12 +509,12 @@ async function snap() {
   const frames = [];
   const free = () => { frames.forEach(f => { f.width = f.height = 0; }); };   // hapus gambar dari memori
   try {
-    for (let k = 0; k < FRAMES; k++) {                  // 3 foto berurutan (gambar hanya di memori, tidak disimpan/diunggah)
+    for (let k = 0; k < FRAMES; k++) {                  // beberapa foto berurutan (gambar hanya di memori, tidak disimpan/diunggah)
       setStatus('Tahan diam... foto ' + (k + 1) + '/' + FRAMES);
       const c = grab(); if (!c) throw new Error('Kamera belum siap, coba lagi.');
       preprocess(c); frames.push(c);
       if (navigator.vibrate) navigator.vibrate(40);
-      if (k < FRAMES - 1) await sleep(200);
+      if (k < FRAMES - 1) await sleep(150);
     }
   } catch (e) {
     free(); ocrBusy = false; $('snapBtn').disabled = false; $('camBtn').disabled = false;
@@ -530,26 +525,33 @@ async function snap() {
   setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
   try {
     await prepareOCR();
-    const reads = [];
+    const reads = [], raws = [];
     let r = { s: 'weak' };
     for (let k = 0; k < frames.length; k++) {           // berhenti lebih awal begitu 2 bacaan identik (lebih cepat)
-      curFrame = k + 1; setInfo('Membaca Trx Id (foto ' + curFrame + '/' + FRAMES + ')... 0%');
+      curFrame = k + 1; setInfo('Membaca Trx Id (foto ' + curFrame + '/' + frames.length + ')... 0%');
       const { data } = await worker.recognize(frames[k]);
-      reads.push(extractTrx(data.text));
+      reads.push(extractTrx(data.text)); raws.push(String(data.text || '').replace(/\s+/g, ' ').trim());
       r = consensus(reads);
       if (r.s === 'ok') break;
     }
+    const seenTxt = [...new Set(raws.filter(Boolean))].slice(0, 2).join(' | ').slice(0, 70);
+    const dbg = seenTxt ? ' Teks yang terbaca: "' + seenTxt + '".' : ' Tidak ada teks yang terbaca sama sekali.';
+    if (r.s === 'weak') { const one = reads.find(x => x.s === 'ok'); if (one) r = { s: 'single', d: one.d, n: reads.length }; }
     if (r.s === 'ok') {
       $('trxId').value = r.d;
       beep(); toast('Trx Id terbaca: ' + r.d + '. Cocokkan dengan struk lalu tambahkan.', true, 5000);
       if ($('autoSave').checked && r.all) addStruk(); else $('trxId').focus();
-      if (!r.all) setWarn('Hanya 2 dari ' + reads.length + ' foto yang sama. Periksa baik-baik kode ' + r.d + ' dengan struk sebelum menambahkan.');
+      if (!r.all) setWarn('Tidak semua foto sama. Periksa baik-baik kode ' + r.d + ' dengan struk sebelum menambahkan.');
+    } else if (r.s === 'single') {                      // hanya 1 bacaan valid: ditampilkan untuk dicek mata, TIDAK pernah ditambah otomatis
+      $('trxId').value = r.d; $('trxId').focus();
+      setWarn('Hanya 1 dari ' + r.n + ' foto yang terbaca (' + r.d + '). Cocokkan angka dengan struk sebelum menambahkan, atau scan ulang.');
+      toast('Terbaca sebagian, periksa kode.', false, 6000);
     } else {
       $('trxId').value = '';
       let msg;
       if (r.s === 'conflict') msg = 'Bacaan tidak konsisten (' + r.list.join(' / ') + '). Periksa kode, scan ulang dengan lebih tajam, atau ketik manual.';
       else if (r.s === 'bad') msg = 'Terbaca ' + r.list.map(d => d + ' (' + d.length + ' angka)').join(', ') + ', padahal Trx Id harus tepat ' + TRX_DIGITS + ' angka. Periksa kode pada struk, lalu scan ulang atau ketik manual.';
-      else msg = 'Trx Id tidak terbaca dengan yakin. Dekatkan, perjelas cahaya, pastikan baris Trx Id masuk kotak hijau, lalu scan ulang atau ketik manual.';
+      else msg = 'Trx Id tidak terbaca dengan yakin. Pastikan baris Trx Id berada di dalam kotak hijau, sejajar, tajam, dan cukup terang, lalu scan ulang atau ketik manual.' + dbg;
       setWarn(msg); toast('Trx Id tidak diterima. Periksa kode.', false, 6000);
     }
   } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
