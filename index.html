@@ -75,13 +75,14 @@
         <button onclick="newTrip()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded whitespace-nowrap">Pengantaran Baru</button>
       </div>
       <div class="text-sm font-semibold text-gray-700">2. Muatan (Foto Struk)</div>
-      <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Struk</button>
+      <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Trx Id</button>
       <div id="ocrInfo" class="hidden bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm"></div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Trx Id</label>
-        <input id="trxId" autocomplete="off" autocapitalize="characters" placeholder="contoh: TRX202299" class="w-full mt-1 p-3 border rounded-lg font-mono uppercase">
+        <label class="block text-sm font-medium text-gray-700">Trx Id <span class="text-gray-400 font-normal">(7 angka; awalan huruf apa pun boleh, yang tersimpan hanya 7 angkanya)</span></label>
+        <input id="trxId" autocomplete="off" autocapitalize="characters" placeholder="contoh: TRX1234567 atau 1234567" class="w-full mt-1 p-3 border rounded-lg font-mono uppercase text-lg tracking-wide">
+        <p id="trxWarn" class="hidden mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2"></p>
       </div>
-      <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis jika Trx Id terbaca</label>
+      <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis hanya jika dua bacaan kamera berurutan identik</label>
       <button id="addBtn" onclick="addStruk()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold">+ Tambah Struk</button>
       <div>
         <div class="flex justify-between text-sm font-medium text-gray-700 mb-1"><span>Daftar struk (belum diupload)</span><span id="tripCount">0 struk</span></div>
@@ -97,10 +98,10 @@
   </div>
 </div>
 
-<!-- KAMERA (preview ringan, OCR hanya berjalan saat tombol ditekan) -->
+<!-- KAMERA (OCR hanya berjalan setelah tombol ditekan) -->
 <div id="scanOverlay" class="hidden fixed inset-0 bg-black z-50 flex flex-col">
   <div class="flex justify-between items-center p-3 text-white">
-    <span class="font-semibold">Foto Struk</span>
+    <span class="font-semibold">Baca Trx Id</span>
     <div class="flex gap-2">
       <button id="torchBtn" onclick="toggleTorch()" class="hidden bg-white/20 px-3 py-1 rounded">🔦</button>
       <button onclick="closeScanner()" class="bg-red-600 px-3 py-1 rounded">Tutup</button>
@@ -109,13 +110,13 @@
   <div class="flex-1 flex items-center justify-center overflow-hidden">
     <div id="camWrap" class="relative w-full">
       <video id="cam" playsinline muted class="w-full h-full object-cover block"></video>
-      <div class="absolute inset-x-[4%] inset-y-[12%] border-2 border-green-400 rounded pointer-events-none"></div>
+      <div class="absolute inset-x-[4%] inset-y-[42%] border-2 border-green-400 rounded pointer-events-none"></div>
     </div>
   </div>
   <div class="p-4 space-y-2">
     <p id="ocrStatus" class="text-center text-green-300 text-xs min-h-4"></p>
-    <p class="text-center text-gray-300 text-xs">Posisikan bagian atas struk (baris Trx Id) di dalam kotak hijau. Tahan sebentar saja: begitu tombol ditekan gambar langsung diambil dan kamera menutup, struk boleh diturunkan.</p>
-    <button id="snapBtn" onclick="snap()" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Ambil & Baca Struk</button>
+    <p class="text-center text-gray-300 text-xs">Letakkan <b>satu baris Trx Id</b> (yang dibaca hanya 7 angkanya) tepat di dalam kotak hijau, sejajar dan tajam. Tahan kamera diam sekitar 1 detik saat tombol ditekan.</p>
+    <button id="snapBtn" onclick="snap()" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Ambil & Baca Trx Id</button>
   </div>
 </div>
 
@@ -123,7 +124,10 @@
 
 <script>
 // ====== GANTI dengan URL Web App Apps Script Anda (yang berakhiran /exec) ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbzm-0-kpvg2OhLCoWsELAmFr3ijjKVQpEaVD-mGs6W2OfWmKfZ2vJt6IcyVHCcwXAWQ6g/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby8or6ltHqVZK_nUqaAYdtSlie6_LziLuLNqe5Ay8IZDeBhb_Ex8n9A6GdxgyRBZvTc5Q/exec';
+const MIN_SERVER_VERSION = 12;
+const TRX_DIGITS = 7;      // Trx Id = awalan huruf bebas + 7 angka; yang disimpan hanya 7 angka
+const FRAMES = 3;          // jumlah foto berurutan per pembacaan (konsensus)
 
 // ====== DAFTAR KURIR & KENDARAAN (edit di sini; tidak membaca Google Drive sehingga langsung muncul) ======
 const KURIR = [
@@ -164,8 +168,8 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   const set = (t, c) => { el.textContent = t; el.className = 'text-xs text-center ' + c; };
   if (API_URL.indexOf('script.google.com') < 0) return set('⚠ API_URL di index.html belum diisi URL /exec', 'text-red-600');
   fetch(API_URL).then(r => r.text()).then(t => {
-    const j = JSON.parse(t), ok = Number(j.versi) >= 10;
-    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
+    const j = JSON.parse(t), ok = Number(j.versi) >= MIN_SERVER_VERSION;
+    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: tempel Code.gs terbaru lalu deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
   }).catch(() => set('⚠ Server tidak terhubung. Cek URL /exec dan deployment (akses: Anyone).', 'text-red-600'));
 })();
 
@@ -174,12 +178,14 @@ let U = "", P = "", role = "", total = 0;
 const run = () => google.script.run.withFailureHandler(err => toast(err.message || err, false, 9000));
 const api = (fn, ...args) => new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](U, P, ...args));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function toast(msg, ok = true, ms = 2500) {
   const t = $('toast'); t.textContent = msg;
   t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm shadow-lg z-[60] ' + (ok ? 'bg-green-600' : 'bg-red-600');
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), ms);
 }
+function setWarn(t) { const e = $('trxWarn'); e.textContent = t ? '⚠ ' + t : ''; e.classList.toggle('hidden', !t); }
 function beep() {
   try { const c = new (window.AudioContext || window.webkitAudioContext)(), o = c.createOscillator();
     o.frequency.value = 1000; o.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, 120); } catch (e) {}
@@ -187,6 +193,19 @@ function beep() {
 }
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 const load = k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } };
+
+/* ====== ATURAN TRX ID: yang dipatok hanya 7 angka. Awalan huruf bebas (TRX, TRXX, TR, TRXXX, atau tanpa awalan) ======
+   Diterima : TRX1234567, TRXX1234567, TR1234567, 1234567  -> "1234567"
+   Ditolak  : 123456 / TRX123456 (6 angka), 123456777 / TRX123456777 (9 angka), huruf di tengah angka (12A4567) */
+function parseTrx(v) {
+  const s = String(v || '').toUpperCase().replace(/\s+/g, '');
+  if (!s) return { ok: false, msg: 'Trx Id belum diisi.' };
+  const m = s.match(/^[A-Z:._-]*(\d+)$/);
+  if (!m) return { ok: false, msg: 'Format "' + s + '" salah. Isi harus tepat ' + TRX_DIGITS + ' angka (boleh diawali huruf, contoh TRX1234567). Periksa kode.' };
+  if (m[1].length !== TRX_DIGITS)
+    return { ok: false, msg: 'Kode "' + s + '" berisi ' + m[1].length + ' angka (' + m[1] + '), seharusnya tepat ' + TRX_DIGITS + ' angka. Periksa kode pada struk.' };
+  return { ok: true, digits: m[1] };
+}
 
 /* login */
 function handleLogin() {
@@ -214,7 +233,6 @@ const M = {
   kendaraan: KENDARAAN.map(k => ({ plat: norm(k.plat), jenis: String(k.jenis || '').trim() })).filter(k => k.plat && k.jenis)
 };
 const key = s => String(s || '').toUpperCase().replace(/\s+/g, '');
-// Nama kurir diketik bebas; jika cocok dengan daftar (beda huruf besar/kecil), pakai penulisan di daftar
 const nk = v => { v = String(v || '').replace(/\s+/g, ' ').trim(); return M.kurir.find(x => x.toLowerCase() === v.toLowerCase()) || v; };
 const findPlat = v => M.kendaraan.find(x => key(x.plat) === key(v));
 
@@ -246,7 +264,7 @@ function startTrip() {
 }
 function enterTrip(t) {
   trip = t;
-  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);       // kurir tetap bisa diisi/diubah sampai upload
+  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);
   $('startBtn').classList.add('hidden'); $('stepQR').classList.remove('hidden');
   $('kurir').value = t.kurir || ''; $('deskripsi').value = t.deskripsi || '';
   showInfo(); renderTrip();
@@ -257,7 +275,7 @@ function resetTrip() {
   ['kendaraan', 'waktu'].forEach(i => $(i).disabled = false);
   if (!waktuManual) $('waktu').value = waktuNow();
   $('startBtn').classList.remove('hidden'); $('stepQR').classList.add('hidden');
-  $('kurir').value = ''; $('trxId').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = '';
+  $('kurir').value = ''; $('trxId').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = ''; setWarn('');
 }
 function newTrip() {
   if (saving || ocrBusy || checking) return toast('Tunggu proses selesai.', false);
@@ -272,7 +290,7 @@ function renderTrip() {
   $('uploadBtn').textContent = n ? 'Upload Semua (' + n + ' struk)' : 'Upload Semua';
   $('uploadBtn').disabled = !n || saving;
   $('qrList').innerHTML = trip.items.map((x, i) => ({ x, i })).reverse().map(({ x, i }) =>
-    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono">' + esc(x.trxId) +
+    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono text-base">' + esc(x.trxId) +
     '</span><span class="flex items-center"><span class="text-gray-400 text-xs">#' + (i + 1) +
     '</span><button onclick="removeItem(' + i + ')" class="text-red-600 text-xs underline ml-3">Hapus</button></span></div>').join('');
   $('counter').textContent = total + ' struk';
@@ -281,7 +299,7 @@ $('kurir').addEventListener('input', e => { if (trip) { trip.kurir = e.target.va
 $('kurir').addEventListener('change', e => { const v = nk(e.target.value); e.target.value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } });
 /* kurir: dropdown yang juga bisa diketik (opsional) */
 function setKurir(v) { v = nk(v); $('kurir').value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } }
-function kurirMenu(show, all) {                 // all = tampilkan seluruh daftar (tombol ▼); jika tidak, saring sesuai ketikan
+function kurirMenu(show, all) {
   const box = $('kurirMenu'); box.innerHTML = '';
   if (!show) return box.classList.add('hidden');
   const q = all ? '' : $('kurir').value.trim().toLowerCase();
@@ -298,6 +316,7 @@ $('kurirToggle').addEventListener('click', () => kurirMenu($('kurirMenu').classL
 $('kurir').addEventListener('keydown', e => { if (e.key === 'Escape') kurirMenu(false); });
 document.addEventListener('pointerdown', e => { if (!$('kurirBox').contains(e.target)) kurirMenu(false); });
 $('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
+$('trxId').addEventListener('input', () => setWarn(''));
 
 /* draft: daftar struk yang belum diupload disimpan di perangkat agar tidak hilang saat halaman ter-refresh */
 const draftKey = () => 'draft_' + U.trim().toLowerCase();
@@ -308,36 +327,41 @@ function restoreDraft() {
   if (!t || !Array.isArray(t.items) || !t.items.length) return;
   const m = findPlat(t.plat);
   if (!m || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
-  const items = t.items.filter(x => x && x.trxId).map(x => ({ trxId: String(x.trxId) }));
+  // draft lama berformat TRX... dikonversi; yang tidak valid 7 angka dibuang
+  const seen = new Set(), items = [];
+  t.items.forEach(x => { const r = parseTrx(x && x.trxId); if (r.ok && !seen.has(r.digits)) { seen.add(r.digits); items.push({ trxId: r.digits }); } });
+  const dropped = t.items.length - items.length;
   if (!items.length) return clearDraft();
   waktuManual = true;
   $('kendaraan').value = m.plat; $('waktu').value = t.waktu;
   enterTrip({ kurir: String(t.kurir || '').slice(0, 60), plat: m.plat, jenis: m.jenis, waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items });
-  toast('Draft dipulihkan: ' + items.length + ' struk belum diupload.', true, 5000);
+  toast('Draft dipulihkan: ' + items.length + ' struk belum diupload.' + (dropped ? ' ' + dropped + ' dibuang (bukan 7 angka).' : ''), !dropped, 6000);
 }
 
 let checking = false;
 async function addStruk() {
   if (!trip || checking) return;
   if (saving) return toast('Tunggu upload selesai.', false);
-  const trxId = $('trxId').value.trim().toUpperCase().replace(/\s+/g, '');
-  if (!trxId) return toast('Trx Id belum diisi.', false);
-  if (!/^[A-Z0-9._\/-]{3,40}$/.test(trxId)) return toast('Trx Id tidak valid (huruf/angka, 3-40 karakter).', false, 4000);
-  if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
+  const p = parseTrx($('trxId').value);
+  if (!p.ok) { setWarn(p.msg); return toast(p.msg, false, 6000); }
+  const trxId = p.digits;
+  if (trip.items.some(x => x.trxId === trxId)) { setWarn('Trx Id ' + trxId + ' sudah ada di daftar.'); return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false); }
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '';
   try {
     const r = await api('cekTrx', trxId);          // Trx Id yang sudah terupload di transaksi lain tidak boleh diinput lagi
+    if (r.invalid) { setWarn(r.message); return toast(r.message, false, 6000); }
     if (r.found) {
-      $('trxId').value = '';
-      return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
+      const m = 'Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').';
+      $('trxId').value = ''; setWarn(m);
+      return toast(m, false, 6000);
     }
   } catch (e) { warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; }
   finally { checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; }
   if (trip !== t || t.items.some(x => x.trxId === trxId)) return;
   t.items.push({ trxId });
-  $('trxId').value = '';
-  saveDraft(); renderTrip(); toast('Struk ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
+  $('trxId').value = ''; setWarn('');
+  saveDraft(); renderTrip(); toast('Struk ' + trxId + ' ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
 }
 function removeItem(i) {
   if (!trip || saving) return;
@@ -353,12 +377,12 @@ async function uploadAll() {
   try {
     const f = { waktu: t.waktu, kurir: t.kurir, plat: t.plat, jenis: t.jenis, deskripsi: t.deskripsi || '', items: t.items };
     const r = await api('simpanBatch', f);
-    if (r.duplicate) {                              // buang struk yang sudah pernah terupload dari daftar, sisanya bisa diupload lagi
+    if (r.duplicate) {
       const bad = new Set(r.dups || []); t.items = t.items.filter(x => !bad.has(x.trxId));
       saveDraft(); renderTrip();
       return toast(r.message + ' Struk tersebut dihapus dari daftar, tekan Upload lagi untuk sisanya.', false, 9000);
     }
-    if (!r.success) return toast(r.message, false, 6000);
+    if (!r.success) return toast(r.message, false, 8000);
     total += r.count;
     resetTrip(); $('counter').textContent = total + ' struk';
     toast(r.message, true, 5000);
@@ -367,21 +391,36 @@ async function uploadAll() {
 }
 $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
-/* ekstraksi Trx Id dari teks hasil OCR (toleran terhadap salah baca O/0, I/l/1) */
-function extractStruk(raw) {
-  const t = String(raw || '').replace(/\r/g, '').replace(/\|/g, 'I');
-  let trx = '', m = t.match(/Tr[xk]\s*[Il1!]d\s*[:;.,]*\s*([A-Za-z0-9]{4,20})/i) || t.match(/\b(TRX\s?[0-9OQIL]{3,})/i);
-  if (m) {
-    trx = m[1].toUpperCase().replace(/\s+/g, '');
-    const p = trx.match(/^TRX[0-9OQIL]+/);
-    if (p) trx = 'TRX' + p[0].slice(3).replace(/[OQ]/g, '0').replace(/[IL]/g, '1');
-  }
-  return { trx };
+/* ====== OCR: yang dicari hanya deret angka Trx Id. Awalan huruf diabaikan, huruf tidak pernah diubah jadi angka ======
+   Satu bacaan menghasilkan: ok (tepat 7 angka) | bad (angka salah jumlah / lebih dari satu kode) | none */
+function extractTrx(raw) {
+  const toks = String(raw || '').toUpperCase().split(/[\s:]+/).filter(Boolean), pre = [], bare = [];
+  toks.forEach(t => {
+    let m = t.match(/^[A-Z]+(\d{4,})$/);               // huruf + angka menempel (TRX1234567, TR1234567, ...) = kode Trx Id
+    if (m) return pre.push(m[1]);
+    m = t.match(/^(\d{4,})$/);                          // deret angka berdiri sendiri (angka pendek <4 digit diabaikan)
+    if (m) bare.push(m[1]);
+  });
+  const uniq = [...new Set(pre.length ? pre : bare)];  // yang berawalan huruf didahulukan
+  if (!uniq.length) return { s: 'none' };
+  if (uniq.length === 1 && uniq[0].length === TRX_DIGITS) return { s: 'ok', d: uniq[0] };
+  return { s: 'bad', list: uniq };                   // salah jumlah angka, atau terbaca beberapa kode berbeda
+}
+/* Konsensus: minimal 2 dari 3 foto harus menghasilkan 7 angka yang SAMA persis,
+   dan tidak boleh ada foto lain yang menghasilkan 7 angka berbeda. */
+function consensus(reads) {
+  const cnt = {};
+  reads.forEach(r => { if (r.s === 'ok') cnt[r.d] = (cnt[r.d] || 0) + 1; });
+  const keys = Object.keys(cnt);
+  if (keys.length > 1) return { s: 'conflict', list: keys };
+  if (keys.length === 1 && cnt[keys[0]] >= 2) return { s: 'ok', d: keys[0], all: cnt[keys[0]] === reads.length };
+  const bad = [].concat(...reads.filter(r => r.s === 'bad').map(r => r.list));
+  if (bad.length) return { s: 'bad', list: [...new Set(bad)] };
+  return { s: 'weak' };
 }
 
 /* kamera + OCR (Tesseract.js, dimuat hanya saat kamera dibuka; OCR berjalan hanya saat tombol ditekan) */
-let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null;
-const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null, curFrame = 1;
 const setStatus = t => { $('ocrStatus').textContent = t; };
 const setInfo = t => { const e = $('ocrInfo'); e.textContent = t ? '⏳ ' + t : ''; e.classList.toggle('hidden', !t); };
 
@@ -401,27 +440,35 @@ function prepareOCR() {
     worker = await Tesseract.createWorker('eng', 1, {
       logger: m => {
         const pct = Math.round((m.progress || 0) * 100);
-        if (m.status === 'recognizing text') setInfo('Membaca struk... ' + pct + '%');
+        if (m.status === 'recognizing text') setInfo('Membaca Trx Id (foto ' + curFrame + '/' + FRAMES + ')... ' + pct + '%');
         else if (ocrBusy) setInfo('Menyiapkan OCR... ' + pct + '%');
         else setStatus(m.status + ' ' + pct + '%');
       }
+    }, { load_system_dawg: '0', load_freq_dawg: '0' });   // matikan kamus kata: lebih cepat & angka tidak "dikoreksi" jadi kata
+    // Hanya karakter yang mungkin ada di baris "Trx Id : TRX1234567" yang boleh terbaca
+    await worker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+      tessedit_char_whitelist: 'TRXDtrxd: 0123456789',
+      user_defined_dpi: '300',
+      preserve_interword_spaces: '1'
     });
-    await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK, preserve_interword_spaces: '1' });
     setStatus('OCR siap.');
   })().catch(e => { ocrReady = null; worker = null; setStatus(''); throw e; });
   return ocrReady;
 }
 
-function grab() {                       // potong area di dalam kotak hijau, lalu skala ke lebar ±1400px
+function grab() {                       // potong strip di dalam kotak hijau (lebar 92%, tinggi 16%), skala ke lebar ±1200px
   const v = $('cam'), vw = v.videoWidth, vh = v.videoHeight;
   if (!vw) return null;
-  const sx = vw * 0.04, sy = vh * 0.12, sw = vw * 0.92, sh = vh * 0.76, k = Math.min(2, 1400 / sw);
-  cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
-  ctx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-  return cv;
+  const sx = vw * 0.04, sy = vh * 0.42, sw = vw * 0.92, sh = vh * 0.16, k = Math.min(1.5, 1200 / sw);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+  c.getContext('2d', { willReadFrequently: true }).drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
 }
 function preprocess(c) {                // abu-abu + perenggang kontras agar teks struk lebih tajam
-  const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  const im = x.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
   for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = y; hist[y]++; }
   let acc = 0, lo = 0, hi = 255;
   for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.02) { lo = v; break; } }
@@ -429,18 +476,18 @@ function preprocess(c) {                // abu-abu + perenggang kontras agar tek
   for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.98) { hi = v; break; } }
   const span = Math.max(1, hi - lo);
   for (let i = 0; i < d.length; i += 4) { let y = (d[i] - lo) * 255 / span; y = y < 0 ? 0 : y > 255 ? 255 : y; d[i] = d[i + 1] = d[i + 2] = y; }
-  ctx.putImageData(im, 0, 0);
+  x.putImageData(im, 0, 0);
 }
 
 async function openScanner() {
   if (stream || !trip) return;
   if (ocrBusy) return toast('Tunggu pembacaan struk sebelumnya selesai.', false);
-  $('scanOverlay').classList.remove('hidden'); setStatus('');
+  $('scanOverlay').classList.remove('hidden'); setStatus(''); $('snapBtn').disabled = false;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     const v = $('cam'); v.srcObject = stream; await v.play();
-    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;       // kotak panduan = proporsi video agar crop akurat
+    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;
     w.style.aspectRatio = v.videoWidth + '/' + v.videoHeight; w.style.maxWidth = (68 * r) + 'vh';
   } catch (err) {
     closeScanner();
@@ -449,7 +496,7 @@ async function openScanner() {
   const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
   if (caps.torch) $('torchBtn').classList.remove('hidden');
   tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));   // siapkan di latar belakang
+  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));
 }
 function closeScanner() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -463,23 +510,50 @@ async function toggleTorch() {
 
 async function snap() {
   if (!stream || ocrBusy) return;
-  const c = grab(); if (!c) return toast('Kamera belum siap, coba lagi.', false);
-  preprocess(c);                         // gambar hanya ada di memori (canvas), tidak disimpan/diunggah
-  ocrBusy = true; $('camBtn').disabled = true;
-  if (navigator.vibrate) navigator.vibrate(60);
-  closeScanner();                        // kamera langsung ditutup: struk boleh diturunkan
+  ocrBusy = true; $('snapBtn').disabled = true; $('camBtn').disabled = true; setWarn('');
+  const frames = [];
+  const free = () => { frames.forEach(f => { f.width = f.height = 0; }); };   // hapus gambar dari memori
+  try {
+    for (let k = 0; k < FRAMES; k++) {                  // 3 foto berurutan (gambar hanya di memori, tidak disimpan/diunggah)
+      setStatus('Tahan diam... foto ' + (k + 1) + '/' + FRAMES);
+      const c = grab(); if (!c) throw new Error('Kamera belum siap, coba lagi.');
+      preprocess(c); frames.push(c);
+      if (navigator.vibrate) navigator.vibrate(40);
+      if (k < FRAMES - 1) await sleep(200);
+    }
+  } catch (e) {
+    free(); ocrBusy = false; $('snapBtn').disabled = false; $('camBtn').disabled = false;
+    return toast(e.message || 'Gagal mengambil gambar.', false, 5000);
+  }
+  closeScanner();                                       // kamera ditutup: struk boleh diturunkan
+  $('snapBtn').disabled = false;
   setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
   try {
     await prepareOCR();
-    setInfo('Membaca struk... 0%');
-    const { data } = await worker.recognize(c);
-    const r = extractStruk(data.text);
-    if (!r.trx) return toast('Trx Id tidak terbaca. Buka kamera lagi, dekatkan, dan perjelas cahaya.', false, 6000);
-    $('trxId').value = r.trx;
-    beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
-    if ($('autoSave').checked) addStruk(); else $('trxId').focus();
+    const reads = [];
+    let r = { s: 'weak' };
+    for (let k = 0; k < frames.length; k++) {           // berhenti lebih awal begitu 2 bacaan identik (lebih cepat)
+      curFrame = k + 1; setInfo('Membaca Trx Id (foto ' + curFrame + '/' + FRAMES + ')... 0%');
+      const { data } = await worker.recognize(frames[k]);
+      reads.push(extractTrx(data.text));
+      r = consensus(reads);
+      if (r.s === 'ok') break;
+    }
+    if (r.s === 'ok') {
+      $('trxId').value = r.d;
+      beep(); toast('Trx Id terbaca: ' + r.d + '. Cocokkan dengan struk lalu tambahkan.', true, 5000);
+      if ($('autoSave').checked && r.all) addStruk(); else $('trxId').focus();
+      if (!r.all) setWarn('Hanya 2 dari ' + reads.length + ' foto yang sama. Periksa baik-baik kode ' + r.d + ' dengan struk sebelum menambahkan.');
+    } else {
+      $('trxId').value = '';
+      let msg;
+      if (r.s === 'conflict') msg = 'Bacaan tidak konsisten (' + r.list.join(' / ') + '). Periksa kode, scan ulang dengan lebih tajam, atau ketik manual.';
+      else if (r.s === 'bad') msg = 'Terbaca ' + r.list.map(d => d + ' (' + d.length + ' angka)').join(', ') + ', padahal Trx Id harus tepat ' + TRX_DIGITS + ' angka. Periksa kode pada struk, lalu scan ulang atau ketik manual.';
+      else msg = 'Trx Id tidak terbaca dengan yakin. Dekatkan, perjelas cahaya, pastikan baris Trx Id masuk kotak hijau, lalu scan ulang atau ketik manual.';
+      setWarn(msg); toast('Trx Id tidak diterima. Periksa kode.', false, 6000);
+    }
   } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
-  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }   // hapus gambar dari memori
+  finally { ocrBusy = false; free(); setInfo(''); $('camBtn').disabled = false; }
 }
 
 /* kelola user (main user) */
