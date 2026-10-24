@@ -16,18 +16,6 @@
   <input id="password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg">
   <p id="loginMsg" class="text-sm text-red-600"></p>
   <button id="loginBtn" onclick="handleLogin()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Masuk</button>
-  <button onclick="showRegister(true)" class="w-full text-sm text-blue-600 underline">Belum punya akun? Ajukan pendaftaran</button>
-</div>
-
-<!-- PENDAFTARAN -->
-<div id="registerSection" class="hidden bg-white p-6 rounded-2xl shadow-lg w-full max-w-md mt-10 sm:mt-0 space-y-3">
-  <h2 class="text-xl font-bold text-gray-800 text-center">Permintaan Pendaftaran User</h2>
-  <input id="regNik" inputmode="numeric" placeholder="NIK (Nomor Induk Karyawan)" class="w-full p-3 border rounded-lg">
-  <input id="regNama" placeholder="Nama lengkap" class="w-full p-3 border rounded-lg">
-  <textarea id="regKet" rows="3" placeholder="Keterangan (bagian/keperluan)" class="w-full p-3 border rounded-lg"></textarea>
-  <p id="regMsg" class="text-sm"></p>
-  <button id="regBtn" onclick="kirimPermintaan()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Kirim Permintaan</button>
-  <button onclick="showRegister(false)" class="w-full text-sm text-gray-600 underline">Kembali ke login</button>
 </div>
 
 <!-- APLIKASI -->
@@ -56,8 +44,12 @@
     <div id="stepData" class="space-y-3">
       <div class="text-sm font-semibold text-gray-700">1. Data Pengantaran</div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Kurir</label>
-        <select id="kurir" class="w-full mt-1 p-3 border rounded-lg bg-white disabled:bg-gray-100"><option value="">Pilih kurir</option></select>
+        <label class="block text-sm font-medium text-gray-700">Kurir <span class="text-gray-400 font-normal">(opsional, bisa diisi nanti)</span></label>
+        <div id="kurirBox" class="relative mt-1">
+          <input id="kurir" autocomplete="off" placeholder="Pilih dari daftar atau ketik nama kurir" class="w-full p-3 pr-11 border rounded-lg">
+          <button type="button" id="kurirToggle" aria-label="Buka daftar kurir" class="absolute inset-y-0 right-0 px-3 text-gray-500">▼</button>
+          <div id="kurirMenu" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-56 overflow-y-auto"></div>
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">Kendaraan</label>
@@ -86,14 +78,10 @@
       <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Struk</button>
       <div id="ocrInfo" class="hidden bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm"></div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Trx Id (Format: TRX + 7 Digit Angka)</label>
-        <input id="trxId" autocomplete="off" autocapitalize="characters" placeholder="contoh: TRX2022991" class="w-full mt-1 p-3 border rounded-lg font-mono uppercase">
+        <label class="block text-sm font-medium text-gray-700">Trx Id</label>
+        <input id="trxId" autocomplete="off" autocapitalize="characters" placeholder="contoh: TRX202299" class="w-full mt-1 p-3 border rounded-lg font-mono uppercase">
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Tgl.PB</label>
-        <input id="tglPb" autocomplete="off" placeholder="DD-MM-YYYY HH:mm:ss" class="w-full mt-1 p-3 border rounded-lg font-mono">
-      </div>
-      <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis jika Trx Id & Tgl.PB terbaca</label>
+      <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis jika Trx Id terbaca</label>
       <button id="addBtn" onclick="addStruk()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold">+ Tambah Struk</button>
       <div>
         <div class="flex justify-between text-sm font-medium text-gray-700 mb-1"><span>Daftar struk (belum diupload)</span><span id="tripCount">0 struk</span></div>
@@ -109,7 +97,7 @@
   </div>
 </div>
 
-<!-- KAMERA -->
+<!-- KAMERA (preview ringan, OCR hanya berjalan saat tombol ditekan) -->
 <div id="scanOverlay" class="hidden fixed inset-0 bg-black z-50 flex flex-col">
   <div class="flex justify-between items-center p-3 text-white">
     <span class="font-semibold">Foto Struk</span>
@@ -126,7 +114,7 @@
   </div>
   <div class="p-4 space-y-2">
     <p id="ocrStatus" class="text-center text-green-300 text-xs min-h-4"></p>
-    <p class="text-center text-gray-300 text-xs">Posisikan bagian atas struk (Trx Id sampai Tgl.PB) di dalam kotak hijau. Tahan sebentar saja: begitu tombol ditekan gambar langsung diambil dan kamera menutup, struk boleh diturunkan.</p>
+    <p class="text-center text-gray-300 text-xs">Posisikan bagian atas struk (baris Trx Id) di dalam kotak hijau. Tahan sebentar saja: begitu tombol ditekan gambar langsung diambil dan kamera menutup, struk boleh diturunkan.</p>
     <button id="snapBtn" onclick="snap()" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Ambil & Baca Struk</button>
   </div>
 </div>
@@ -134,15 +122,10 @@
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm shadow-lg z-[60]"></div>
 
 <script>
-// ==========================================
-// PENGATURAN UTAMA DIGIT TRX (Bisa diubah jika nanti naik digit)
-// ==========================================
-const TRX_DIGIT_COUNT = 7; 
-
 // ====== GANTI dengan URL Web App Apps Script Anda (yang berakhiran /exec) ======
-const API_URL = 'https://script.google.com/macros/s/AKfycby8or6ltHqVZK_nUqaAYdtSlie6_LziLuLNqe5Ay8IZDeBhb_Ex8n9A6GdxgyRBZvTc5Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzm-0-kpvg2OhLCoWsELAmFr3ijjKVQpEaVD-mGs6W2OfWmKfZ2vJt6IcyVHCcwXAWQ6g/exec';
 
-// ====== DAFTAR KURIR & KENDARAAN ======
+// ====== DAFTAR KURIR & KENDARAAN (edit di sini; tidak membaca Google Drive sehingga langsung muncul) ======
 const KURIR = [
   'Kristian',
   'Wenly',
@@ -152,13 +135,10 @@ const KURIR = [
   'Andre',
   'Icat',
 ];
-const KENDARAAN = [
+const KENDARAAN = [                     // plat + jenis kendaraan
   { plat: 'DN 8919 DY', jenis: 'MAE CARGO DOUBLE BAN' },
   { plat: 'DB 8528 QL', jenis: 'MAE CARGO ENGKEL' },
   { plat: 'B 9468 UXE', jenis: 'L300' },
-  { plat: 'SEWA', jenis: 'GRAND MAX' },
-  { plat: 'SEWA', jenis: 'ENGKEL BOX' },
-  { plat: 'SEWA', jenis: 'DOUBLE BAN' },
   { plat: 'DB 8196 LD', jenis: 'ENGKEL BAN JNE' },
 ];
 
@@ -169,9 +149,9 @@ function makeRunner(ok = () => {}, fail = () => {}) {
     if (name === 'withSuccessHandler') return f => makeRunner(f, fail);
     if (name === 'withFailureHandler') return f => makeRunner(ok, f);
     return (...args) => {
-      fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: name, args }) })
+      fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: name, args }) })   // text/plain: tanpa preflight CORS
         .then(r => r.text())
-        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('SERVER: balasan bukan data.'); } })
+        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('SERVER: balasan bukan data. Pastikan deployment: Execute as Me, akses Anyone, URL /exec benar, dan sudah New version.'); } })
         .then(d => d.error ? fail(new Error(d.error)) : ok(d.data))
         .catch(e => fail(new Error(e.message.startsWith('SERVER') ? e.message.slice(8) : 'Gagal terhubung ke server: ' + e.message)));
     };
@@ -184,9 +164,9 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   const set = (t, c) => { el.textContent = t; el.className = 'text-xs text-center ' + c; };
   if (API_URL.indexOf('script.google.com') < 0) return set('⚠ API_URL di index.html belum diisi URL /exec', 'text-red-600');
   fetch(API_URL).then(r => r.text()).then(t => {
-    const j = JSON.parse(t), ok = Number(j.versi) >= 9;
-    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : ''), ok ? 'text-green-600' : 'text-amber-600');
-  }).catch(() => set('⚠ Server tidak terhubung.', 'text-red-600'));
+    const j = JSON.parse(t), ok = Number(j.versi) >= 10;
+    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
+  }).catch(() => set('⚠ Server tidak terhubung. Cek URL /exec dan deployment (akses: Anyone).', 'text-red-600'));
 })();
 
 const $ = id => document.getElementById(id);
@@ -227,29 +207,15 @@ function handleLogin() {
 }
 ['username', 'password'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); }));
 
-/* pendaftaran */
-$('regNik').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
-function showRegister(s) { $('registerSection').classList.toggle('hidden', !s); $('loginSection').classList.toggle('hidden', s); }
-function regMsg(m, ok) { $('regMsg').textContent = m; $('regMsg').className = 'text-sm ' + (ok ? 'text-green-700' : 'text-red-600'); }
-function kirimPermintaan() {
-  const d = { nik: $('regNik').value.trim(), nama: $('regNama').value.trim(), keterangan: $('regKet').value.trim() };
-  if (!/^\d+$/.test(d.nik)) return regMsg('NIK harus berupa angka.', false);
-  if (!d.nama || !d.keterangan) return regMsg('Nama dan keterangan wajib diisi.', false);
-  const btn = $('regBtn'); btn.disabled = true; btn.textContent = 'Mengirim...';
-  const reset = () => { btn.disabled = false; btn.textContent = 'Kirim Permintaan'; };
-  google.script.run
-    .withSuccessHandler(r => { reset(); regMsg(r.message, r.success); if (r.success) ['regNik', 'regNama', 'regKet'].forEach(i => $(i).value = ''); })
-    .withFailureHandler(err => { reset(); regMsg('Gagal mengirim: ' + (err.message || err), false); })
-    .kirimPermintaan(d);
-}
-
-/* data master */
+/* data master (dari konstanta KURIR & KENDARAAN di atas) */
 const norm = s => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 const M = {
   kurir: [...new Set(KURIR.map(k => String(k).trim()).filter(Boolean))],
   kendaraan: KENDARAAN.map(k => ({ plat: norm(k.plat), jenis: String(k.jenis || '').trim() })).filter(k => k.plat && k.jenis)
 };
 const key = s => String(s || '').toUpperCase().replace(/\s+/g, '');
+// Nama kurir diketik bebas; jika cocok dengan daftar (beda huruf besar/kecil), pakai penulisan di daftar
+const nk = v => { v = String(v || '').replace(/\s+/g, ' ').trim(); return M.kurir.find(x => x.toLowerCase() === v.toLowerCase()) || v; };
 const findPlat = v => M.kendaraan.find(x => key(x.plat) === key(v));
 
 function setOptions(id, items, keep) {
@@ -257,44 +223,45 @@ function setOptions(id, items, keep) {
   if (keep && items.some(o => o.v === keep)) s.value = keep;
 }
 function initMaster() {
-  setOptions('kurir', M.kurir.map(n => ({ v: n, t: n })), load('kurir'));
   setOptions('kendaraan', M.kendaraan.slice().sort((a, b) => a.plat.localeCompare(b.plat)).map(k => ({ v: k.plat, t: k.plat + ' - ' + k.jenis })), load('plat'));
   waktuManual = false; $('waktu').value = waktuNow();
+  if (!M.kurir.length || !M.kendaraan.length) toast('Daftar kurir/kendaraan di index.html masih kosong.', false, 8000);
   restoreDraft();
 }
 
+/* waktu otomatis: Pagi 05.00-10.59, Siang 11.00-17.59, Malam 18.00-04.59 */
 let waktuManual = false;
 function waktuNow() { const h = new Date().getHours(); return h >= 5 && h < 11 ? 'Pagi' : h >= 11 && h < 18 ? 'Siang' : 'Malam'; }
 $('waktu').addEventListener('change', () => { waktuManual = true; });
 
+/* langkah 1 & 2: pengantaran dan struk */
 let trip = null, saving = false;
 
 function startTrip() {
-  const kurir = $('kurir').value, plat = $('kendaraan').value, m = findPlat(plat);
-  if (!kurir) return toast('Pilih kurir dulu.', false);
+  const m = findPlat($('kendaraan').value);
   if (!m) return toast('Pilih kendaraan dulu.', false);
   if (!waktuManual) $('waktu').value = waktuNow();
-  store('kurir', kurir); store('plat', m.plat);
-  enterTrip({ kurir, plat: m.plat, jenis: m.jenis, waktu: $('waktu').value, deskripsi: '', items: [] });
+  store('plat', m.plat);
+  enterTrip({ kurir: nk($('kurir').value), plat: m.plat, jenis: m.jenis, waktu: $('waktu').value, deskripsi: '', items: [] });
 }
 function enterTrip(t) {
   trip = t;
-  ['kurir', 'kendaraan', 'waktu'].forEach(i => $(i).disabled = true);
+  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);       // kurir tetap bisa diisi/diubah sampai upload
   $('startBtn').classList.add('hidden'); $('stepQR').classList.remove('hidden');
-  $('tripInfo').textContent = t.kurir + ' • ' + t.plat + ' (' + t.jenis + ') • ' + t.waktu;
-  $('deskripsi').value = t.deskripsi || '';
-  renderTrip();
+  $('kurir').value = t.kurir || ''; $('deskripsi').value = t.deskripsi || '';
+  showInfo(); renderTrip();
 }
+function showInfo() { $('tripInfo').textContent = (trip.kurir || 'Kurir belum diisi') + ' • ' + trip.plat + ' (' + trip.jenis + ') • ' + trip.waktu; }
 function resetTrip() {
   trip = null; clearDraft();
-  ['kurir', 'kendaraan', 'waktu'].forEach(i => $(i).disabled = false);
+  ['kendaraan', 'waktu'].forEach(i => $(i).disabled = false);
   if (!waktuManual) $('waktu').value = waktuNow();
   $('startBtn').classList.remove('hidden'); $('stepQR').classList.add('hidden');
-  $('trxId').value = ''; $('tglPb').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = '';
+  $('kurir').value = ''; $('trxId').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = '';
 }
 function newTrip() {
   if (saving || ocrBusy || checking) return toast('Tunggu proses selesai.', false);
-  if (trip && trip.items.length && !confirm('Ada ' + trip.items.length + ' struk belum diupload. Buang semuanya?')) return;
+  if (trip && trip.items.length && !confirm('Ada ' + trip.items.length + ' struk yang belum diupload. Buang semuanya dan mulai pengantaran baru?')) return;
   resetTrip();
 }
 function renderTrip() {
@@ -305,12 +272,34 @@ function renderTrip() {
   $('uploadBtn').textContent = n ? 'Upload Semua (' + n + ' struk)' : 'Upload Semua';
   $('uploadBtn').disabled = !n || saving;
   $('qrList').innerHTML = trip.items.map((x, i) => ({ x, i })).reverse().map(({ x, i }) =>
-    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono">TRX' + esc(x.trxId) +
-    '<span class="block text-xs text-gray-500">' + esc(x.tglPb) + '</span></span><span class="flex items-center"><span class="text-gray-400 text-xs">#' + (i + 1) +
+    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono">' + esc(x.trxId) +
+    '</span><span class="flex items-center"><span class="text-gray-400 text-xs">#' + (i + 1) +
     '</span><button onclick="removeItem(' + i + ')" class="text-red-600 text-xs underline ml-3">Hapus</button></span></div>').join('');
   $('counter').textContent = total + ' struk';
 }
+$('kurir').addEventListener('input', e => { if (trip) { trip.kurir = e.target.value.replace(/\s+/g, ' ').trim(); showInfo(); saveDraft(); } kurirMenu(true, false); });
+$('kurir').addEventListener('change', e => { const v = nk(e.target.value); e.target.value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } });
+/* kurir: dropdown yang juga bisa diketik (opsional) */
+function setKurir(v) { v = nk(v); $('kurir').value = v; if (trip) { trip.kurir = v; showInfo(); saveDraft(); } }
+function kurirMenu(show, all) {                 // all = tampilkan seluruh daftar (tombol ▼); jika tidak, saring sesuai ketikan
+  const box = $('kurirMenu'); box.innerHTML = '';
+  if (!show) return box.classList.add('hidden');
+  const q = all ? '' : $('kurir').value.trim().toLowerCase();
+  const add = (label, val, extra) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+    b.className = 'block w-full text-left px-3 py-2 text-sm border-b last:border-b-0 hover:bg-gray-100 ' + (extra || '');
+    b.onclick = () => { setKurir(val); kurirMenu(false); }; box.appendChild(b);
+  };
+  M.kurir.filter(n => n.toLowerCase().includes(q)).forEach(n => add(n, n));
+  if (all && $('kurir').value) add('— Kosongkan kurir —', '', 'text-gray-500');
+  box.classList.toggle('hidden', !box.children.length);
+}
+$('kurirToggle').addEventListener('click', () => kurirMenu($('kurirMenu').classList.contains('hidden'), true));
+$('kurir').addEventListener('keydown', e => { if (e.key === 'Escape') kurirMenu(false); });
+document.addEventListener('pointerdown', e => { if (!$('kurirBox').contains(e.target)) kurirMenu(false); });
+$('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
 
+/* draft: daftar struk yang belum diupload disimpan di perangkat agar tidak hilang saat halaman ter-refresh */
 const draftKey = () => 'draft_' + U.trim().toLowerCase();
 function saveDraft() { if (trip && trip.items.length) store(draftKey(), JSON.stringify(trip)); else clearDraft(); }
 function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} }
@@ -318,88 +307,56 @@ function restoreDraft() {
   let t; try { t = JSON.parse(load(draftKey()) || 'null'); } catch (e) { t = null; }
   if (!t || !Array.isArray(t.items) || !t.items.length) return;
   const m = findPlat(t.plat);
-  if (!m || !M.kurir.includes(t.kurir) || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
-  const items = t.items.filter(x => x && x.trxId && x.tglPb).map(x => ({ trxId: String(x.trxId), tglPb: String(x.tglPb) }));
+  if (!m || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
+  const items = t.items.filter(x => x && x.trxId).map(x => ({ trxId: String(x.trxId) }));
   if (!items.length) return clearDraft();
   waktuManual = true;
-  $('kurir').value = t.kurir; $('kendaraan').value = m.plat; $('waktu').value = t.waktu;
-  enterTrip({ kurir: t.kurir, plat: m.plat, jenis: m.jenis, waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items });
+  $('kendaraan').value = m.plat; $('waktu').value = t.waktu;
+  enterTrip({ kurir: String(t.kurir || '').slice(0, 60), plat: m.plat, jenis: m.jenis, waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items });
   toast('Draft dipulihkan: ' + items.length + ' struk belum diupload.', true, 5000);
-}
-
-const TGL_RE = /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$/;
-function tglOk(s) {
-  if (!TGL_RE.test(s)) return false;
-  const [d, mo, , h, mi, se] = s.match(/\d+/g).map(Number);
-  return d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && h < 24 && mi < 60 && se < 60;
 }
 
 let checking = false;
 async function addStruk() {
   if (!trip || checking) return;
   if (saving) return toast('Tunggu upload selesai.', false);
-  
-  let rawInput = $('trxId').value.trim().toUpperCase();
-  const tglPb = $('tglPb').value.trim().replace(/\s+/g, ' ');
-
-  // Bersihkan input untuk mengambil angka atau mendeteksi format TRX + angka
-  let cleanNums = rawInput.replace(/^TRX/, '').replace(/\D/g, '');
-
-  // Validasi panjang digit harus tepat sesuai TRX_DIGIT_COUNT (7 digit)
-  if (cleanNums.length !== TRX_DIGIT_COUNT) {
-    return toast(`Gagal: Trx Id harus berjumlah tepat ${TRX_DIGIT_COUNT} digit angka setelah TRX! (Contoh: TRX1234567)`, false, 5000);
-  }
-
-  const trxId = cleanNums; // Disimpan murni angka 7 digit di memori/spreadsheet
-
-  if (!tglOk(tglPb)) return toast('Tgl.PB harus berformat DD-MM-YYYY HH:mm:ss.', false, 4000);
-  if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id TRX' + trxId + ' sudah ada di daftar.', false);
-  
+  const trxId = $('trxId').value.trim().toUpperCase().replace(/\s+/g, '');
+  if (!trxId) return toast('Trx Id belum diisi.', false);
+  if (!/^[A-Z0-9._\/-]{3,40}$/.test(trxId)) return toast('Trx Id tidak valid (huruf/angka, 3-40 karakter).', false, 4000);
+  if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '';
   try {
-    const r = await api('cekTrx', trxId);
+    const r = await api('cekTrx', trxId);          // Trx Id yang sudah terupload di transaksi lain tidak boleh diinput lagi
     if (r.found) {
-      $('trxId').value = ''; $('tglPb').value = '';
-      return toast('Ditolak: Trx Id TRX' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
+      $('trxId').value = '';
+      return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
     }
   } catch (e) { warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; }
   finally { checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; }
-  
   if (trip !== t || t.items.some(x => x.trxId === trxId)) return;
-  t.items.push({ trxId, tglPb });
-  $('trxId').value = ''; $('tglPb').value = '';
+  t.items.push({ trxId });
+  $('trxId').value = '';
   saveDraft(); renderTrip(); toast('Struk ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
 }
-
-$('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
 function removeItem(i) {
   if (!trip || saving) return;
-  const x = trip.items[i]; if (!x || !confirm('Hapus struk TRX' + x.trxId + ' dari daftar?')) return;
+  const x = trip.items[i]; if (!x || !confirm('Hapus struk ' + x.trxId + ' dari daftar?')) return;
   trip.items.splice(i, 1); saveDraft(); renderTrip();
 }
-
 async function uploadAll() {
   if (!trip || saving || checking) return;
   if (ocrBusy) return toast('Tunggu pembacaan struk selesai.', false);
   if (!trip.items.length) return toast('Belum ada struk di daftar.', false);
-  
-  // Validasi akhir sebelum upload memastikan semua item tepat sejumlah digit
-  for (let item of trip.items) {
-    if (!item.trxId || item.trxId.length !== TRX_DIGIT_COUNT) {
-      return toast(`Gagal upload: Terdapat Trx Id yang tidak berjumlah ${TRX_DIGIT_COUNT} digit.`, false, 6000);
-    }
-  }
-
   saving = true; const btn = $('uploadBtn'); btn.disabled = true; btn.textContent = 'Mengupload...';
-  const t = trip;
+  const t = trip; t.kurir = nk($('kurir').value);
   try {
     const f = { waktu: t.waktu, kurir: t.kurir, plat: t.plat, jenis: t.jenis, deskripsi: t.deskripsi || '', items: t.items };
     const r = await api('simpanBatch', f);
-    if (r.duplicate) {
+    if (r.duplicate) {                              // buang struk yang sudah pernah terupload dari daftar, sisanya bisa diupload lagi
       const bad = new Set(r.dups || []); t.items = t.items.filter(x => !bad.has(x.trxId));
       saveDraft(); renderTrip();
-      return toast(r.message + ' Struk duplikat dihapus dari daftar.', false, 9000);
+      return toast(r.message + ' Struk tersebut dihapus dari daftar, tekan Upload lagi untuk sisanya.', false, 9000);
     }
     if (!r.success) return toast(r.message, false, 6000);
     total += r.count;
@@ -408,44 +365,21 @@ async function uploadAll() {
   } catch (e) { toast(e.message || e, false, 6000); }
   finally { saving = false; if (trip) renderTrip(); }
 }
-$('tglPb').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
+$('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
-/* Ekstraksi OCR: Tampil di form dengan format TRX + 7 digit */
+/* ekstraksi Trx Id dari teks hasil OCR (toleran terhadap salah baca O/0, I/l/1) */
 function extractStruk(raw) {
   const t = String(raw || '').replace(/\r/g, '').replace(/\|/g, 'I');
-  const fixDigits = s => s.replace(/[Oo]/g, '0').replace(/[Il]/g, '1');
-
-  let trx = '', guess = false;
-  let m = t.match(/Tr[xk]\s*[Il1!]d\s*[:;.,]*\s*([A-Za-z0-9]{4,25})/i) || t.match(/\b(TRX\s?[0-9OQIL]{3,})/i) || t.match(/\b([0-9OQIL]{6,12})\b/);
-  
+  let trx = '', m = t.match(/Tr[xk]\s*[Il1!]d\s*[:;.,]*\s*([A-Za-z0-9]{4,20})/i) || t.match(/\b(TRX\s?[0-9OQIL]{3,})/i);
   if (m) {
-    let clean = m[1].toUpperCase().replace(/\s+/g, '').replace(/[OQ]/g, '0').replace(/[IL]/g, '1').replace(/[^0-9]/g, '');
-    if (clean.length === TRX_DIGIT_COUNT) {
-      trx = 'TRX' + clean;
-    } else if (clean.length > TRX_DIGIT_COUNT) {
-      // Jika lebih (misal terscan 9 digit), ambil 7 digit terakhir atau beri peringatan
-      trx = 'TRX' + clean.slice(-TRX_DIGIT_COUNT);
-      guess = true;
-    } else if (clean.length >= 4) {
-      trx = 'TRX' + clean;
-      guess = true;
-    }
+    trx = m[1].toUpperCase().replace(/\s+/g, '');
+    const p = trx.match(/^TRX[0-9OQIL]+/);
+    if (p) trx = 'TRX' + p[0].slice(3).replace(/[OQ]/g, '0').replace(/[IL]/g, '1');
   }
-
-  // Tgl.PB -> DD-MM-YYYY HH:mm:ss
-  const D = '[0-9OoIl]', S = '\\s*[-/.]\\s*', C = '\\s*[:.;]\\s*';
-  const re = new RegExp('T[gq][lI1]\\.?\\s*P[B8]\\s*[:;.,]*\\s*(' + D + '{2})' + S + '(' + D + '{2})' + S + '(' + D + '{4})\\s+(' + D + '{2})' + C + '(' + D + '{2})' + C + '(' + D + '{2})', 'i');
-  let tgl = '', g = t.match(re);
-  if (!g) { g = t.match(/(\d{2})\s*-\s*(\d{2})\s*-\s*(\d{4})\s+(\d{2})\s*:\s*(\d{2})\s*:\s*(\d{2})/); if (g) guess = true; }
-  if (g) {
-    const v = g.slice(1, 7).map(fixDigits);
-    const s = v[0] + '-' + v[1] + '-' + v[2] + ' ' + v[3] + ':' + v[4] + ':' + v[5];
-    if (tglOk(s)) tgl = s;
-  }
-  return { trx, tgl, guess };
+  return { trx };
 }
 
-/* Kamera + OCR */
+/* kamera + OCR (Tesseract.js, dimuat hanya saat kamera dibuka; OCR berjalan hanya saat tombol ditekan) */
 let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null;
 const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
 const setStatus = t => { $('ocrStatus').textContent = t; };
@@ -455,13 +389,13 @@ function loadTess() {
   return window.Tesseract ? Promise.resolve() : new Promise((ok, no) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-    s.onload = ok; s.onerror = () => no(new Error('Gagal memuat Tesseract.js.'));
+    s.onload = ok; s.onerror = () => no(new Error('Gagal memuat Tesseract.js. Periksa koneksi internet.'));
     document.head.appendChild(s);
   });
 }
 function prepareOCR() {
   if (ocrReady) return ocrReady;
-  setStatus('Menyiapkan OCR...');
+  setStatus('Menyiapkan OCR (pertama kali agak lama)...');
   ocrReady = (async () => {
     await loadTess();
     worker = await Tesseract.createWorker('eng', 1, {
@@ -478,7 +412,7 @@ function prepareOCR() {
   return ocrReady;
 }
 
-function grab() {
+function grab() {                       // potong area di dalam kotak hijau, lalu skala ke lebar ±1400px
   const v = $('cam'), vw = v.videoWidth, vh = v.videoHeight;
   if (!vw) return null;
   const sx = vw * 0.04, sy = vh * 0.12, sw = vw * 0.92, sh = vh * 0.76, k = Math.min(2, 1400 / sw);
@@ -486,7 +420,7 @@ function grab() {
   ctx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
   return cv;
 }
-function preprocess(c) {
+function preprocess(c) {                // abu-abu + perenggang kontras agar teks struk lebih tajam
   const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
   for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = y; hist[y]++; }
   let acc = 0, lo = 0, hi = 255;
@@ -500,22 +434,22 @@ function preprocess(c) {
 
 async function openScanner() {
   if (stream || !trip) return;
-  if (ocrBusy) return toast('Tunggu pembacaan selesai.', false);
+  if (ocrBusy) return toast('Tunggu pembacaan struk sebelumnya selesai.', false);
   $('scanOverlay').classList.remove('hidden'); setStatus('');
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     const v = $('cam'); v.srcObject = stream; await v.play();
-    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;
+    const w = $('camWrap'), r = v.videoWidth / v.videoHeight;       // kotak panduan = proporsi video agar crop akurat
     w.style.aspectRatio = v.videoWidth + '/' + v.videoHeight; w.style.maxWidth = (68 * r) + 'vh';
   } catch (err) {
     closeScanner();
-    return toast('Izin kamera ditolak atau tidak tersedia.', false, 5000);
+    return toast(/Permission|NotAllowed/i.test(String(err)) ? 'Izin kamera ditolak. Aktifkan izin kamera di browser.' : 'Kamera tidak bisa dibuka. Isi Trx Id secara manual.', false, 5000);
   }
   const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
   if (caps.torch) $('torchBtn').classList.remove('hidden');
   tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));
+  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));   // siapkan di latar belakang
 }
 function closeScanner() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -529,35 +463,26 @@ async function toggleTorch() {
 
 async function snap() {
   if (!stream || ocrBusy) return;
-  const c = grab(); if (!c) return toast('Kamera belum siap.', false);
-  preprocess(c);
+  const c = grab(); if (!c) return toast('Kamera belum siap, coba lagi.', false);
+  preprocess(c);                         // gambar hanya ada di memori (canvas), tidak disimpan/diunggah
   ocrBusy = true; $('camBtn').disabled = true;
   if (navigator.vibrate) navigator.vibrate(60);
-  closeScanner();
-  setInfo('Gambar diambil. Menyiapkan OCR...');
+  closeScanner();                        // kamera langsung ditutup: struk boleh diturunkan
+  setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
   try {
     await prepareOCR();
-    setInfo('Membaca struk...');
+    setInfo('Membaca struk... 0%');
     const { data } = await worker.recognize(c);
     const r = extractStruk(data.text);
-    if (!r.trx && !r.tgl) return toast('Trx Id / Tgl.PB tidak terbaca dengan jelas.', false, 6000);
-    
-    $('trxId').value = r.trx; $('tglPb').value = r.tgl;
-    beep();
-    
-    // Validasi panjang digit hasil scan
-    let numOnly = r.trx.replace(/^TRX/, '');
-    if (numOnly.length !== TRX_DIGIT_COUNT) {
-      toast(`Peringatan: Trx terbaca tidak tepat ${TRX_DIGIT_COUNT} digit (${r.trx}). Periksa kembali sebelum menambah!`, false, 6000);
-    } else {
-      toast('Struk terbaca dengan baik.', true, 3000);
-      if ($('autoSave').checked && r.tgl) addStruk();
-    }
+    if (!r.trx) return toast('Trx Id tidak terbaca. Buka kamera lagi, dekatkan, dan perjelas cahaya.', false, 6000);
+    $('trxId').value = r.trx;
+    beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
+    if ($('autoSave').checked) addStruk(); else $('trxId').focus();
   } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
-  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }
+  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }   // hapus gambar dari memori
 }
 
-/* Kelola user */
+/* kelola user (main user) */
 function toggleAdmin() {
   const open = $('adminPanel').classList.contains('hidden');
   $('adminPanel').classList.toggle('hidden', !open); $('flow').classList.toggle('hidden', open);
@@ -573,22 +498,22 @@ function renderList(id, items, text, del) {
     const info = document.createElement('div'); info.textContent = text(it); row.appendChild(info);
     if (del && !it.locked) {
       const b = document.createElement('button'); b.textContent = 'Hapus'; b.className = 'text-red-600 text-xs underline';
-      b.onclick = () => confirm('Hapus user?') && act('adminDelete', [it.username]); row.appendChild(b);
+      b.onclick = () => del(it); row.appendChild(b);
     }
     box.appendChild(row);
   });
 }
-function act(fn, args) {
-  run().withSuccessHandler(r => { toast(r.message, r.success); if (r.success) loadUsers(); })[fn](U, P, ...args);
+function act(fn, args, after) {
+  run().withSuccessHandler(r => { toast(r.message, r.success); if (r.success) { if (after) after(); loadUsers(); } })[fn](U, P, ...args);
 }
 function loadUsers() {
   run().withSuccessHandler(list => renderList('userList', list.map(u => ({ ...u, locked: u.role === 'admin' })),
     u => u.username + (u.nama ? ' - ' + u.nama : '') + (u.role === 'admin' ? ' (main)' : ''),
-    u => act('adminDelete', [u.username])
+    u => confirm('Hapus user "' + u.username + '"?') && act('adminDelete', [u.username])
   )).adminList(U, P);
 }
 function tambahUserBaru() {
-  act('adminAdd', [{ username: $('aUser').value, password: $('aPass').value, nama: $('aNama').value }]);
+  act('adminAdd', [{ username: $('aUser').value, password: $('aPass').value, nama: $('aNama').value }], () => ['aUser', 'aPass', 'aNama'].forEach(i => $(i).value = ''));
 }
 </script>
 </body>
