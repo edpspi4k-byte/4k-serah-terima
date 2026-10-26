@@ -74,6 +74,13 @@
         </div>
         <button onclick="newTrip()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded whitespace-nowrap">Pengantaran Baru</button>
       </div>
+
+      <!-- BANNER NOTIFIKASI HADIAH LOYALTY -->
+      <div id="loyaltyAlert" class="hidden bg-yellow-50 border-2 border-yellow-400 rounded-lg p-3 text-sm text-yellow-900 shadow-sm animate-pulse">
+        <div class="font-bold flex items-center gap-1">🎁 PERHATIAN: HADIAH LOYALTY!</div>
+        <div id="loyaltyText" class="text-xs mt-1"></div>
+      </div>
+
       <div class="text-sm font-semibold text-gray-700">2. Muatan (Foto Struk)</div>
       <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Struk</button>
       <div id="ocrInfo" class="hidden bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm"></div>
@@ -122,7 +129,7 @@
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm shadow-lg z-[60]"></div>
 
 <script>
-// ====== GANTI DENGAN URL WEB APP APPS SCRIPT BARU ANDA ======
+// ====== GANTI DENGAN URL WEB APP APPS SCRIPT ANDA ======
 const API_URL = 'https://script.google.com/macros/s/AKfycbzC0CJiatEVvmZBF_bDbUK7kOxhRwOdxBeUOAgcDs2g1oPJ8btbrtZuNMf3_42QoV9Wjg/exec';
 
 const KURIR = [
@@ -152,7 +159,7 @@ function makeRunner(ok = () => {}, fail = () => {}) {
     return (...args) => {
       fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: name, args }) })
         .then(r => r.text())
-        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('SERVER: balasan bukan data. Pastikan deployment: Execute as Me, akses Anyone, URL /exec benar, dan sudah New version.'); } })
+        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('SERVER: balasan bukan data.'); } })
         .then(d => d.error ? fail(new Error(d.error)) : ok(d.data))
         .catch(e => fail(new Error(e.message.startsWith('SERVER') ? e.message.slice(8) : 'Gagal terhubung ke server: ' + e.message)));
     };
@@ -165,8 +172,8 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   if (API_URL.indexOf('script.google.com') < 0) return set('⚠ API_URL di index.html belum diisi URL /exec', 'text-red-600');
   fetch(API_URL).then(r => r.text()).then(t => {
     const j = JSON.parse(t), ok = Number(j.versi) >= 10;
-    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
-  }).catch(() => set('⚠ Server tidak terhubung. Cek URL /exec dan deployment (akses: Anyone).', 'text-red-600'));
+    set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : ''), ok ? 'text-green-600' : 'text-amber-600');
+  }).catch(() => set('⚠ Server tidak terhubung.', 'text-red-600'));
 })();
 
 const $ = id => document.getElementById(id);
@@ -222,7 +229,6 @@ function setOptions(id, items, keep) {
 function initMaster() {
   setOptions('kendaraan', M.kendaraan.slice().sort((a, b) => a.plat.localeCompare(b.plat)).map(k => ({ v: k.plat, t: k.plat + ' - ' + k.jenis })), load('plat'));
   waktuManual = false; $('waktu').value = waktuNow();
-  if (!M.kurir.length || !M.kendaraan.length) toast('Daftar kurir/kendaraan di index.html masih kosong.', false, 8000);
   restoreDraft();
 }
 
@@ -253,6 +259,7 @@ function resetTrip() {
   if (!waktuManual) $('waktu').value = waktuNow();
   $('startBtn').classList.remove('hidden'); $('stepQR').classList.add('hidden');
   $('kurir').value = ''; $('trxId').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = '';
+  $('loyaltyAlert').classList.add('hidden'); // Sembunyikan alert loyalty
 }
 function newTrip() {
   if (saving || ocrBusy || checking) return toast('Tunggu proses selesai.', false);
@@ -268,6 +275,7 @@ function renderTrip() {
   $('uploadBtn').disabled = !n || saving;
   $('qrList').innerHTML = trip.items.map((x, i) => ({ x, i })).reverse().map(({ x, i }) =>
     '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono">' + esc(x.trxId) +
+    (x.isLoyalty ? ' <span class="bg-yellow-100 text-yellow-800 text-xs px-1 rounded font-sans font-bold">🎁 LOYALTY</span>' : '') +
     '</span><span class="flex items-center"><span class="text-gray-400 text-xs">#' + (i + 1) +
     '</span><button onclick="removeItem(' + i + ')" class="text-red-600 text-xs underline ml-3">Hapus</button></span></div>').join('');
   $('counter').textContent = total + ' struk';
@@ -301,7 +309,7 @@ function restoreDraft() {
   if (!t || !Array.isArray(t.items) || !t.items.length) return;
   const m = findPlat(t.plat);
   if (!m || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
-  const items = t.items.filter(x => x && x.trxId).map(x => ({ trxId: String(x.trxId) }));
+  const items = t.items.filter(x => x && x.trxId).map(x => ({ trxId: String(x.trxId), isLoyalty: x.isLoyalty || false }));
   if (!items.length) return clearDraft();
   waktuManual = true;
   $('kendaraan').value = m.plat; $('waktu').value = t.waktu;
@@ -317,26 +325,62 @@ async function addStruk() {
   if (!trxId) return toast('Trx Id belum diisi.', false);
   if (!/^\d{7}$/.test(trxId)) return toast('Trx Id tidak valid (harus persis 7 digit angka).', false, 4000);
   if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
+  
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '';
+  let loyaltyData = null;
+
   try {
+    // 1. Cek duplikasi upload
     const r = await api('cekTrx', trxId);
     if (r.found) {
       $('trxId').value = '';
       return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
     }
-  } catch (e) { warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; }
-  finally { checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; }
+    
+    // 2. Cek apakah No PB termasuk hadiah loyalty
+    const lRes = await api('cekLoyaltyTrx', trxId);
+    if (lRes && lRes.isLoyalty) {
+      loyaltyData = lRes;
+    }
+  } catch (e) { 
+    warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; 
+  } finally { 
+    checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; 
+  }
+
   if (trip !== t || t.items.some(x => x.trxId === trxId)) return;
-  t.items.push({ trxId });
+  
+  // Tambahkan ke list dengan status loyalty
+  const isLoyalty = loyaltyData ? true : false;
+  t.items.push({ trxId, isLoyalty });
   $('trxId').value = '';
-  saveDraft(); renderTrip(); toast('Struk ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
+  saveDraft(); renderTrip(); 
+
+  // Jika terdeteksi loyalty, tampilkan pemberitahuan khusus (Banner & Beep)
+  if (isLoyalty) {
+    beep();
+    $('loyaltyAlert').classList.remove('hidden');
+    $('loyaltyText').innerHTML = `No PB <b>${trxId}</b> terdeteksi sebagai pemenang hadiah loyalty!<br>Member: <b>${loyaltyData.namaMember}</b> (${loyaltyData.kodeMember})`;
+    toast('⚠ PEMBERITAHUAN: Trx ini memiliki Hadiah Loyalty!', false, 6000);
+  } else {
+    toast('Struk ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
+  }
 }
+
 function removeItem(i) {
   if (!trip || saving) return;
   const x = trip.items[i]; if (!x || !confirm('Hapus struk ' + x.trxId + ' dari daftar?')) return;
-  trip.items.splice(i, 1); saveDraft(); renderTrip();
+  trip.items.splice(i, 1); 
+  
+  // Sembunyikan banner alert jika tidak ada lagi item loyalty di list
+  if (!trip.items.some(item => item.isLoyalty)) {
+    $('loyaltyAlert').classList.add('hidden');
+  }
+
+  saveDraft(); renderTrip();
 }
+
 async function uploadAll() {
   if (!trip || saving || checking) return;
   if (ocrBusy) return toast('Tunggu pembacaan struk selesai.', false);
@@ -359,13 +403,11 @@ async function uploadAll() {
   finally { saving = false; if (trip) renderTrip(); }
 }
 
-// Membatasi ketikan manual agar HANYA ANGKA dan maksimal 7 DIGIT
 $('trxId').addEventListener('input', e => {
   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 7);
 });
 $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
-/* ekstraksi Trx Id dari teks hasil OCR (hanya angka 7 digit) */
 function extractStruk(raw) {
   const numbersOnly = String(raw || '').replace(/\D/g, '');
   const match = numbersOnly.match(/\b\d{7}\b/) || numbersOnly.match(/\d{7}/);
@@ -381,13 +423,13 @@ function loadTess() {
   return window.Tesseract ? Promise.resolve() : new Promise((ok, no) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-    s.onload = ok; s.onerror = () => no(new Error('Gagal memuat Tesseract.js. Periksa koneksi internet.'));
+    s.onload = ok; s.onerror = () => no(new Error('Gagal memuat Tesseract.js.'));
     document.head.appendChild(s);
   });
 }
 function prepareOCR() {
   if (ocrReady) return ocrReady;
-  setStatus('Menyiapkan OCR (pertama kali agak lama)...');
+  setStatus('Menyiapkan OCR...');
   ocrReady = (async () => {
     await loadTess();
     worker = await Tesseract.createWorker('eng', 1, {
@@ -426,7 +468,7 @@ function preprocess(c) {
 
 async function openScanner() {
   if (stream || !trip) return;
-  if (ocrBusy) return toast('Tunggu pembacaan struk sebelumnya selesai.', false);
+  if (ocrBusy) return toast('Tunggu pembacaan struk selesai.', false);
   $('scanOverlay').classList.remove('hidden'); setStatus('');
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -436,12 +478,12 @@ async function openScanner() {
     w.style.aspectRatio = v.videoWidth + '/' + v.videoHeight; w.style.maxWidth = (68 * r) + 'vh';
   } catch (err) {
     closeScanner();
-    return toast(/Permission|NotAllowed/i.test(String(err)) ? 'Izin kamera ditolak. Aktifkan izin kamera di browser.' : 'Kamera tidak bisa dibuka. Isi Trx Id secara manual.', false, 5000);
+    return toast('Kamera tidak bisa dibuka.', false, 5000);
   }
   const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
   if (caps.torch) $('torchBtn').classList.remove('hidden');
   tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-  prepareOCR().catch(e => toast(e.message || 'OCR gagal disiapkan.', false, 6000));
+  prepareOCR().catch(e => toast(e.message || 'OCR gagal.', false, 6000));
 }
 function closeScanner() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -455,23 +497,22 @@ async function toggleTorch() {
 
 async function snap() {
   if (!stream || ocrBusy) return;
-  const c = grab(); if (!c) return toast('Kamera belum siap, coba lagi.', false);
+  const c = grab(); if (!c) return toast('Kamera belum siap.', false);
   preprocess(c);
   ocrBusy = true; $('camBtn').disabled = true;
   if (navigator.vibrate) navigator.vibrate(60);
   closeScanner();
-  setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
+  setInfo('Memproses gambar...');
   try {
     await prepareOCR();
-    setInfo('Membaca struk... 0%');
     const { data } = await worker.recognize(c);
     const r = extractStruk(data.text);
-    if (!r.trx) return toast('Trx Id 7 digit angka tidak ditemukan. Coba lagi atau ketik manual.', false, 6000);
+    if (!r.trx) return toast('Trx Id 7 digit tidak ditemukan.', false, 6000);
     $('trxId').value = r.trx;
-    beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
+    beep(); toast('Trx Id terbaca.', true, 4000);
     if ($('autoSave').checked) addStruk(); else $('trxId').focus();
-  } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
-  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }
+  } catch (e) { toast('Gagal membaca struk.', false, 6000); }
+  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn'].disabled = false; }
 }
 
 function toggleAdmin() {
