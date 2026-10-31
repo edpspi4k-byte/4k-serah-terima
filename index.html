@@ -25,9 +25,25 @@
     <div class="flex items-center gap-2 flex-wrap justify-end">
       <span id="counter" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-semibold">0 struk</span>
       <span id="loggedUser" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"></span>
+      <button id="loyBtn" onclick="toggleLoyalty()" class="text-xs bg-amber-500 text-white px-2 py-1 rounded">🎁 Loyalty</button>
       <button id="adminBtn" onclick="toggleAdmin()" class="hidden text-xs bg-purple-600 text-white px-2 py-1 rounded">Kelola User</button>
       <button onclick="location.reload()" class="text-xs text-gray-500 underline">Keluar</button>
     </div>
+  </div>
+
+  <div id="loyaltyPanel" class="hidden space-y-3">
+    <div class="flex justify-between items-center">
+      <div class="text-sm font-semibold text-gray-700">Member Loyalty <span id="loyCount" class="text-xs font-normal text-gray-500"></span></div>
+      <button onclick="loadLoyalty()" class="text-xs text-blue-600 underline">Muat ulang</button>
+    </div>
+    <input id="loySearch" placeholder="Cari kode / nama member" class="w-full p-3 border rounded-lg text-sm">
+    <select id="loyFilter" class="w-full p-3 border rounded-lg bg-white text-sm">
+      <option value="semua">Semua</option>
+      <option value="belum">Belum diberikan</option>
+      <option value="sudah">Sudah diberikan</option>
+    </select>
+    <p class="text-xs text-gray-500">Centang (✔ Diberikan) terisi otomatis saat struk member diupload, lengkap dengan Trx hadiah, ID pengantaran, dan tanggal antar (juga tersimpan di sheet loyalty kolom F-H). Member yang sudah dicentang tidak akan memunculkan peringatan lagi.</p>
+    <div id="loyList" class="space-y-2 max-h-[60vh] overflow-y-auto"></div>
   </div>
 
   <div id="adminPanel" class="hidden space-y-3">
@@ -37,6 +53,12 @@
     <input id="aNama" placeholder="Nama (opsional)" class="w-full p-3 border rounded-lg">
     <button onclick="tambahUserBaru()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold">Tambah User</button>
     <div id="userList"></div>
+    <hr class="my-2">
+    <div class="text-sm font-semibold text-gray-700">Kelola Kendaraan</div>
+    <input id="kPlat" autocapitalize="characters" placeholder="Plat (mis. DB 1234 AB, atau SEWA)" class="w-full p-3 border rounded-lg">
+    <input id="kJenis" autocapitalize="characters" placeholder="Jenis kendaraan (mis. ENGKEL)" class="w-full p-3 border rounded-lg">
+    <button onclick="tambahKendaraan()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold">Tambah Kendaraan</button>
+    <div id="kendList"></div>
   </div>
 
   <div id="flow" class="space-y-4">
@@ -82,6 +104,7 @@
         <input id="trxId" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="contoh: 2022991" class="w-full mt-1 p-3 border rounded-lg font-mono">
       </div>
       <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoSave"> Tambah otomatis jika Trx Id terbaca</label>
+      <label class="flex items-center gap-1 text-xs text-purple-700 font-semibold"><input type="checkbox" id="pinT"> PIN T (titip / antar ulang Trx Id yang sudah pernah terupload)</label>
       <button id="addBtn" onclick="addStruk()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold">+ Tambah Struk</button>
       <div>
         <div class="flex justify-between text-sm font-medium text-gray-700 mb-1"><span>Daftar struk (belum diupload)</span><span id="tripCount">0 struk</span></div>
@@ -109,12 +132,12 @@
   <div class="flex-1 flex items-center justify-center overflow-hidden">
     <div id="camWrap" class="relative w-full">
       <video id="cam" playsinline muted class="w-full h-full object-cover block"></video>
-      <div class="absolute inset-x-[4%] inset-y-[12%] border-2 border-green-400 rounded pointer-events-none"></div>
+      <div class="absolute inset-x-[7%] inset-y-[33%] border-2 border-green-400 rounded pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
     </div>
   </div>
   <div class="p-4 space-y-2">
     <p id="ocrStatus" class="text-center text-green-300 text-xs min-h-4"></p>
-    <p class="text-center text-gray-300 text-xs">Posisikan bagian atas struk (baris Trx Id) di dalam kotak hijau. Tahan sebentar saja: begitu tombol ditekan gambar langsung diambil dan kamera menutup, struk boleh diturunkan.</p>
+    <p class="text-center text-gray-300 text-xs">Dekatkan hingga baris "Trx Id" (struk) atau "No PB" (surat jalan) memenuhi kotak hijau, boleh sedikit miring atau diputar. Hanya angka Trx Id / No PB yang dibaca. Tahan diam sekitar 1 detik saat menekan tombol, lalu kamera menutup.</p>
     <button id="snapBtn" onclick="snap()" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold disabled:opacity-60">Ambil & Baca Struk</button>
   </div>
 </div>
@@ -164,7 +187,7 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   const set = (t, c) => { el.textContent = t; el.className = 'text-xs text-center ' + c; };
   if (API_URL.indexOf('script.google.com') < 0) return set('⚠ API_URL di index.html belum diisi URL /exec', 'text-red-600');
   fetch(API_URL).then(r => r.text()).then(t => {
-    const j = JSON.parse(t), ok = Number(j.versi) >= 10;
+    const j = JSON.parse(t), ok = Number(j.versi) >= 15;
     set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
   }).catch(() => set('⚠ Server tidak terhubung. Cek URL /exec dan deployment (akses: Anyone).', 'text-red-600'));
 })();
@@ -199,7 +222,7 @@ function handleLogin() {
       $('loginSection').classList.add('hidden'); $('appSection').classList.remove('hidden');
       $('loggedUser').textContent = res.user;
       if (role === 'admin') $('adminBtn').classList.remove('hidden');
-      initMaster();
+      bootKend();
     })
     .withFailureHandler(err => { btn.disabled = false; btn.textContent = 'Masuk'; $('loginMsg').textContent = 'Error: ' + (err.message || err); })
     .verifyLogin(u, p);
@@ -209,18 +232,37 @@ function handleLogin() {
 const norm = s => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 const M = {
   kurir: [...new Set(KURIR.map(k => String(k).trim()).filter(Boolean))],
-  kendaraan: KENDARAAN.map(k => ({ plat: norm(k.plat), jenis: String(k.jenis || '').trim() })).filter(k => k.plat && k.jenis)
+  kendaraan: []
 };
+const BASE_KEND = KENDARAAN.map(k => ({ plat: norm(k.plat), jenis: String(k.jenis || '').trim() })).filter(k => k.plat && k.jenis);
+M.kendaraan = BASE_KEND.slice();
 const key = s => String(s || '').toUpperCase().replace(/\s+/g, '');
 const nk = v => { v = String(v || '').replace(/\s+/g, ' ').trim(); return M.kurir.find(x => x.toLowerCase() === v.toLowerCase()) || v; };
-const findPlat = v => M.kendaraan.find(x => key(x.plat) === key(v));
+const kendVal = k => k.plat + '|' + k.jenis;
+const findKend = v => M.kendaraan.find(x => kendVal(x) === v);
 
 function setOptions(id, items, keep) {
   const s = $(id); s.length = 1; items.forEach(o => s.add(new Option(o.t, o.v)));
   if (keep && items.some(o => o.v === keep)) s.value = keep;
 }
+function fillKend(keep) {
+  setOptions('kendaraan', M.kendaraan.slice().sort((a, b) => a.plat.localeCompare(b.plat) || a.jenis.localeCompare(b.jenis)).map(k => ({ v: kendVal(k), t: k.plat + ' - ' + k.jenis })), keep);
+}
+function applyKend(list) {
+  const seen = new Set(BASE_KEND.map(kendVal)), extra = [];
+  (list || []).forEach(k => {
+    const o = { plat: norm(k.plat), jenis: String(k.jenis || '').trim() };
+    if (o.plat && o.jenis && !seen.has(kendVal(o))) { seen.add(kendVal(o)); extra.push(o); }
+  });
+  M.kendaraan = BASE_KEND.concat(extra);
+  if (!trip) fillKend($('kendaraan').value || load('kend'));
+}
+function bootKend() {
+  google.script.run.withSuccessHandler(l => { applyKend(l); initMaster(); })
+    .withFailureHandler(() => initMaster()).kendaraanList(U, P);
+}
 function initMaster() {
-  setOptions('kendaraan', M.kendaraan.slice().sort((a, b) => a.plat.localeCompare(b.plat)).map(k => ({ v: k.plat, t: k.plat + ' - ' + k.jenis })), load('plat'));
+  fillKend(load('kend'));
   waktuManual = false; $('waktu').value = waktuNow();
   if (!M.kurir.length || !M.kendaraan.length) toast('Daftar kurir/kendaraan di index.html masih kosong.', false, 8000);
   restoreDraft();
@@ -233,10 +275,10 @@ $('waktu').addEventListener('change', () => { waktuManual = true; });
 let trip = null, saving = false;
 
 function startTrip() {
-  const m = findPlat($('kendaraan').value);
+  const m = findKend($('kendaraan').value);
   if (!m) return toast('Pilih kendaraan dulu.', false);
   if (!waktuManual) $('waktu').value = waktuNow();
-  store('plat', m.plat);
+  store('kend', kendVal(m));
   enterTrip({ kurir: nk($('kurir').value), plat: m.plat, jenis: m.jenis, waktu: $('waktu').value, deskripsi: '', items: [] });
 }
 function enterTrip(t) {
@@ -252,7 +294,7 @@ function resetTrip() {
   ['kendaraan', 'waktu'].forEach(i => $(i).disabled = false);
   if (!waktuManual) $('waktu').value = waktuNow();
   $('startBtn').classList.remove('hidden'); $('stepQR').classList.add('hidden');
-  $('kurir').value = ''; $('trxId').value = ''; $('deskripsi').value = ''; $('qrList').innerHTML = '';
+  $('kurir').value = ''; $('trxId').value = ''; $('pinT').checked = false; $('deskripsi').value = ''; $('qrList').innerHTML = '';
 }
 function newTrip() {
   if (saving || ocrBusy || checking) return toast('Tunggu proses selesai.', false);
@@ -267,7 +309,9 @@ function renderTrip() {
   $('uploadBtn').textContent = n ? 'Upload Semua (' + n + ' struk)' : 'Upload Semua';
   $('uploadBtn').disabled = !n || saving;
   $('qrList').innerHTML = trip.items.map((x, i) => ({ x, i })).reverse().map(({ x, i }) =>
-    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 bg-gray-50"><span class="font-mono">' + esc(x.trxId) +
+    '<div class="flex justify-between items-center text-sm border rounded-lg px-2 py-1 ' + (x.loyalty && !x.loyalty.done ? 'bg-amber-50 border-amber-300' : 'bg-gray-50') + '"><span class="font-mono">' + esc(x.trxId) +
+    (x.pinT ? ' <span class="bg-purple-100 text-purple-700 text-xs px-1 rounded font-sans">PIN T</span>' : '') +
+    (x.loyalty && !x.loyalty.done ? ' <span class="text-amber-700 text-xs font-sans">🎁 ' + esc(x.loyalty.nama) + ' (' + esc(x.loyalty.kode) + ')</span>' : '') +
     '</span><span class="flex items-center"><span class="text-gray-400 text-xs">#' + (i + 1) +
     '</span><button onclick="removeItem(' + i + ')" class="text-red-600 text-xs underline ml-3">Hapus</button></span></div>').join('');
   $('counter').textContent = total + ' struk';
@@ -299,12 +343,17 @@ function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {
 function restoreDraft() {
   let t; try { t = JSON.parse(load(draftKey()) || 'null'); } catch (e) { t = null; }
   if (!t || !Array.isArray(t.items) || !t.items.length) return;
-  const m = findPlat(t.plat);
+  let m = M.kendaraan.find(x => key(x.plat) === key(t.plat) && x.jenis === t.jenis);
+  if (!m && t.plat && t.jenis) { m = { plat: norm(t.plat), jenis: String(t.jenis) }; M.kendaraan.push(m); fillKend(); }
   if (!m || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
-  const items = t.items.filter(x => x && x.trxId).map(x => ({ trxId: String(x.trxId) }));
+  const items = t.items.filter(x => x && x.trxId).map(x => ({
+    trxId: String(x.trxId),
+    pinT: !!x.pinT,
+    loyalty: x.loyalty && typeof x.loyalty === 'object' ? { kode: String(x.loyalty.kode || ''), nama: String(x.loyalty.nama || ''), done: !!x.loyalty.done } : null
+  }));
   if (!items.length) return clearDraft();
   waktuManual = true;
-  $('kendaraan').value = m.plat; $('waktu').value = t.waktu;
+  $('kendaraan').value = kendVal(m); $('waktu').value = t.waktu;
   enterTrip({ kurir: String(t.kurir || '').slice(0, 60), plat: m.plat, jenis: m.jenis, waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items });
   toast('Draft dipulihkan: ' + items.length + ' struk belum diupload.', true, 5000);
 }
@@ -313,24 +362,29 @@ let checking = false;
 async function addStruk() {
   if (!trip || checking) return;
   if (saving) return toast('Tunggu upload selesai.', false);
-  const trxId = $('trxId').value.trim();
+  const trxId = $('trxId').value.trim(), pinT = $('pinT').checked;
   if (!trxId) return toast('Trx Id belum diisi.', false);
   if (!/^\d{7}$/.test(trxId)) return toast('Trx Id tidak valid (harus persis 7 digit angka).', false, 4000);
   if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
-  const t = trip; let warn = '';
+  const t = trip; let warn = '', loy = null;
   try {
     const r = await api('cekTrx', trxId);
-    if (r.found) {
-      $('trxId').value = '';
-      return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + ').', false, 6000);
+    loy = r.loyalty || null;
+    if (r.found && !pinT) {
+      return toast('Ditolak: Trx Id ' + trxId + ' sudah pernah terupload (ID ' + r.id + '). Jika ini antar ulang titipan, centang PIN T lalu tambahkan lagi.', false, 8000);
     }
+    if (!r.found && pinT) warn = ' Trx Id belum pernah tercatat, tetap ditambahkan sebagai PIN T.';
   } catch (e) { warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; }
   finally { checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; }
   if (trip !== t || t.items.some(x => x.trxId === trxId)) return;
-  t.items.push({ trxId });
-  $('trxId').value = '';
-  saveDraft(); renderTrip(); toast('Struk ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
+  t.items.push({ trxId, pinT, loyalty: loy });
+  $('trxId').value = ''; $('pinT').checked = false;
+  saveDraft(); renderTrip(); toast('Struk' + (pinT ? ' PIN T' : '') + ' ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
+  if (loy && !loy.done) {
+    beep();
+    alert('🎁 HADIAH LOYALTY!\n\nTrx Id: ' + trxId + '\nMember: ' + loy.nama + '\nKode: ' + loy.kode + '\n\nMember ini mempunyai hadiah loyalty. Mohon serahkan hadiahnya.');
+  }
 }
 function removeItem(i) {
   if (!trip || saving) return;
@@ -341,6 +395,12 @@ async function uploadAll() {
   if (!trip || saving || checking) return;
   if (ocrBusy) return toast('Tunggu pembacaan struk selesai.', false);
   if (!trip.items.length) return toast('Belum ada struk di daftar.', false);
+  const gifts = {};
+  trip.items.forEach(x => { if (x.loyalty && !x.loyalty.done) gifts[x.loyalty.kode] = x.loyalty.nama; });
+  const gk = Object.keys(gifts);
+  if (gk.length && !confirm('🎁 PENGINGAT HADIAH LOYALTY\n\nAda ' + gk.length + ' member yang mempunyai hadiah di daftar ini:\n' +
+      gk.map(k => '• ' + gifts[k] + ' (' + k + ')').join('\n') +
+      '\n\nPastikan hadiah ikut diantar. Setelah upload, member ditandai otomatis di tab Loyalty.\n\nLanjut upload?')) return;
   saving = true; const btn = $('uploadBtn'); btn.disabled = true; btn.textContent = 'Mengupload...';
   const t = trip; t.kurir = nk($('kurir').value);
   try {
@@ -365,15 +425,39 @@ $('trxId').addEventListener('input', e => {
 });
 $('trxId').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStruk(); } });
 
-/* ekstraksi Trx Id dari teks hasil OCR (hanya angka 7 digit) */
+/* Ekstraksi Trx Id dari teks hasil OCR. HANYA membaca dua sumber (angkanya sama):
+   1) "No PB : 4329738/spi/10/2026/..."  -> 7 digit sebelum "/spi"
+   2) "Trx Id : TRX4329738"              -> 7 digit setelah "TRX"
+   Angka lain di struk (PLU, total, tanggal, telepon, dll) diabaikan. */
+const OD = '[0-9OoIl|SsBZ]', ODG = OD + '(?:\\s?' + OD + '){6}';
+function ocrDigits(v) {
+  v = String(v || '').replace(/\s/g, '').replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').replace(/[Ss]/g, '5').replace(/B/g, '8').replace(/Z/g, '2');
+  return /^\d{7}$/.test(v) ? v : '';
+}
+function firstMatch(text, src) {
+  const re = new RegExp(src, 'gi'); let m;
+  while ((m = re.exec(text))) { const d = ocrDigits(m[1]); if (d) return d; }
+  return '';
+}
 function extractStruk(raw) {
-  const numbersOnly = String(raw || '').replace(/\D/g, '');
-  const match = numbersOnly.match(/\b\d{7}\b/) || numbersOnly.match(/\d{7}/);
-  return { trx: match ? match[0] : '' };
+  const text = String(raw || '');
+  const pb = firstMatch(text, '(?:^|[^0-9A-Za-z])(' + ODG + ')\\s*/\\s*[s5]p[i1l|]');
+  const trx = firstMatch(text, 'T\\s*R\\s*[XK]\\s*[:.\\-]?\\s*(' + ODG + ')(?![0-9])') ||
+              firstMatch(text, 'Trx\\s*Id\\s*[:.\\-]?\\s*(?:T\\s*R\\s*[XK])?\\s*(' + ODG + ')(?![0-9])');
+  let weak = '';
+  if (!pb && !trx) {
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length && !weak; i++) {
+      if (/trx|n[o0]\.?\s*pb/i.test(lines[i])) {
+        const m = (lines[i] + ' ' + (lines[i + 1] || '')).match(/(?:^|\D)(\d{7})(?!\d)/);
+        if (m) weak = m[1];
+      }
+    }
+  }
+  return { trx: pb || trx || weak, pb, trxLabel: trx, sure: !!(pb || trx), conflict: !!(pb && trx && pb !== trx) };
 }
 
-let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null;
-const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+let stream = null, torchOn = false, ocrBusy = false, ocrReady = null, worker = null, ocrTry = '', curPsm = null;
 const setStatus = t => { $('ocrStatus').textContent = t; };
 const setInfo = t => { const e = $('ocrInfo'); e.textContent = t ? '⏳ ' + t : ''; e.classList.toggle('hidden', !t); };
 
@@ -393,35 +477,108 @@ function prepareOCR() {
     worker = await Tesseract.createWorker('eng', 1, {
       logger: m => {
         const pct = Math.round((m.progress || 0) * 100);
-        if (m.status === 'recognizing text') setInfo('Membaca struk... ' + pct + '%');
+        if (m.status === 'recognizing text') setInfo('Membaca struk' + ocrTry + '... ' + pct + '%');
         else if (ocrBusy) setInfo('Menyiapkan OCR... ' + pct + '%');
         else setStatus(m.status + ' ' + pct + '%');
       }
     });
     await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK, preserve_interword_spaces: '1' });
+    curPsm = Tesseract.PSM.SINGLE_BLOCK;
     setStatus('OCR siap.');
   })().catch(e => { ocrReady = null; worker = null; setStatus(''); throw e; });
   return ocrReady;
 }
 
-function grab() {
+/* Area baca = kotak hijau (7% kiri-kanan, 33% atas-bawah). Harus sama dengan kotak di layar kamera. */
+function frameCanvas() {
   const v = $('cam'), vw = v.videoWidth, vh = v.videoHeight;
   if (!vw) return null;
-  const sx = vw * 0.04, sy = vh * 0.12, sw = vw * 0.92, sh = vh * 0.76, k = Math.min(2, 1400 / sw);
-  cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
-  ctx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-  return cv;
+  const sx = vw * 0.07, sy = vh * 0.33, sw = vw * 0.86, sh = vh * 0.34, k = Math.min(3, 1800 / sw);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+  c.getContext('2d', { willReadFrequently: true }).drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+/* Ukuran ketajaman (varians Laplacian) untuk memilih frame yang tidak buram */
+function sharpness(c) {
+  const w = 360, h = Math.max(8, Math.round(c.height * w / c.width)), t = document.createElement('canvas');
+  t.width = w; t.height = h;
+  const x = t.getContext('2d', { willReadFrequently: true });
+  x.drawImage(c, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data, g = new Float32Array(w * h);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  let s1 = 0, s2 = 0, n = 0;
+  for (let y = 1; y < h - 1; y++) for (let xx = 1; xx < w - 1; xx++) {
+    const p = y * w + xx, l = 4 * g[p] - g[p - 1] - g[p + 1] - g[p - w] - g[p + w];
+    s1 += l; s2 += l * l; n++;
+  }
+  t.width = t.height = 0;
+  const m = s1 / n; return s2 / n - m * m;
+}
+async function captureFrames() {
+  const arr = [];
+  for (let i = 0; i < 5; i++) {
+    const f = frameCanvas(); if (f) arr.push({ c: f, s: sharpness(f) });
+    if (i < 4) await new Promise(r => setTimeout(r, 90));
+  }
+  arr.sort((a, b) => b.s - a.s);
+  arr.slice(2).forEach(o => { o.c.width = o.c.height = 0; });
+  return arr.slice(0, 2).map(o => o.c);   // [tertajam, tertajam kedua]
+}
+
+function filt3(a, sw, sh, useMax) {
+  const o = new Float32Array(a.length);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+    let acc = 0, cnt = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const yy = y + dy, xx = x + dx;
+      if (yy < 0 || yy >= sh || xx < 0 || xx >= sw) continue;
+      const v = a[yy * sw + xx];
+      if (useMax) { if (v > acc) acc = v; } else { acc += v; cnt++; }
+    }
+    o[y * sw + x] = useMax ? acc : acc / cnt;
+  }
+  return o;
+}
+/* Abu-abu -> ratakan cahaya (bagi dengan perkiraan warna kertas) -> regangkan kontras */
+function flattenStretch(g, W, H) {
+  const N = W * H, s = 8, sw = Math.max(2, Math.ceil(W / s)), sh = Math.max(2, Math.ceil(H / s));
+  let bg = new Float32Array(sw * sh);
+  for (let y = 0; y < H; y += 2) {
+    const by = Math.min(sh - 1, (y / s) | 0);
+    for (let x = 0; x < W; x += 2) {
+      const k = by * sw + Math.min(sw - 1, (x / s) | 0), v = g[y * W + x];
+      if (v > bg[k]) bg[k] = v;
+    }
+  }
+  bg = filt3(filt3(bg, sw, sh, true), sw, sh, true);
+  bg = filt3(filt3(bg, sw, sh, false), sw, sh, false);
+  const out = new Uint8Array(N), hist = new Uint32Array(256);
+  for (let y = 0; y < H; y++) {
+    const fy = Math.min(sh - 1, Math.max(0, (y + 0.5) / s - 0.5)), y0 = fy | 0, y1 = Math.min(sh - 1, y0 + 1), ty = fy - y0;
+    for (let x = 0; x < W; x++) {
+      const fx = Math.min(sw - 1, Math.max(0, (x + 0.5) / s - 0.5)), x0 = fx | 0, x1 = Math.min(sw - 1, x0 + 1), tx = fx - x0;
+      const b = (bg[y0 * sw + x0] * (1 - tx) + bg[y0 * sw + x1] * tx) * (1 - ty) + (bg[y1 * sw + x0] * (1 - tx) + bg[y1 * sw + x1] * tx) * ty;
+      let v = g[y * W + x] * 235 / Math.max(b, 16);
+      v = v < 0 ? 0 : v > 255 ? 255 : v | 0;
+      out[y * W + x] = v; hist[v]++;
+    }
+  }
+  let acc = 0, lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= N * 0.02) { lo = v; break; } }
+  acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= N * 0.98) { hi = v; break; } }
+  const span = Math.max(1, hi - lo);
+  for (let i = 0; i < N; i++) { let v = (out[i] - lo) * 255 / span; out[i] = v < 0 ? 0 : v > 255 ? 255 : v; }
+  return out;
 }
 function preprocess(c) {
-  const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, hist = new Uint32Array(256);
-  for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = y; hist[y]++; }
-  let acc = 0, lo = 0, hi = 255;
-  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.02) { lo = v; break; } }
-  acc = 0;
-  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.98) { hi = v; break; } }
-  const span = Math.max(1, hi - lo);
-  for (let i = 0; i < d.length; i += 4) { let y = (d[i] - lo) * 255 / span; y = y < 0 ? 0 : y > 255 ? 255 : y; d[i] = d[i + 1] = d[i + 2] = y; }
-  ctx.putImageData(im, 0, 0);
+  const x = c.getContext('2d', { willReadFrequently: true }), W = c.width, H = c.height;
+  const im = x.getImageData(0, 0, W, H), d = im.data, N = W * H, g = new Uint8Array(N);
+  for (let i = 0, j = 0; j < N; i += 4, j++) g[j] = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+  const o = flattenStretch(g, W, H);
+  for (let i = 0, j = 0; j < N; i += 4, j++) d[i] = d[i + 1] = d[i + 2] = o[j];
+  x.putImageData(im, 0, 0);
 }
 
 async function openScanner() {
@@ -453,33 +610,159 @@ async function toggleTorch() {
   catch (e) { torchOn = false; }
 }
 
-async function snap() {
-  if (!stream || ocrBusy) return;
-  const c = grab(); if (!c) return toast('Kamera belum siap, coba lagi.', false);
-  preprocess(c);
-  ocrBusy = true; $('camBtn').disabled = true;
-  if (navigator.vibrate) navigator.vibrate(60);
-  closeScanner();
-  setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
-  try {
-    await prepareOCR();
-    setInfo('Membaca struk... 0%');
-    const { data } = await worker.recognize(c);
+function rotateCanvas(c, deg) {
+  if (!deg) return c;
+  const o = document.createElement('canvas'), swap = Math.abs(deg) === 90;
+  o.width = swap ? c.height : c.width; o.height = swap ? c.width : c.height;
+  const x = o.getContext('2d');
+  x.translate(o.width / 2, o.height / 2); x.rotate(deg * Math.PI / 180); x.drawImage(c, -c.width / 2, -c.height / 2);
+  return o;
+}
+/* Baca satu gambar; jika tidak ketemu, coba mode segmentasi kedua (teks tersebar) */
+async function readOne(src, allowSparse) {
+  const modes = allowSparse ? [Tesseract.PSM.SINGLE_BLOCK, Tesseract.PSM.SPARSE_TEXT] : [Tesseract.PSM.SINGLE_BLOCK];
+  let last = null;
+  for (const m of modes) {
+    if (curPsm !== m) { await worker.setParameters({ tessedit_pageseg_mode: m }); curPsm = m; }
+    const { data } = await worker.recognize(src);
     const r = extractStruk(data.text);
-    if (!r.trx) return toast('Trx Id 7 digit angka tidak ditemukan. Coba lagi atau ketik manual.', false, 6000);
-    $('trxId').value = r.trx;
-    beep(); toast('Trx Id terbaca. Periksa lalu tambahkan.', true, 4000);
-    if ($('autoSave').checked) addStruk(); else $('trxId').focus();
-  } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
-  finally { ocrBusy = false; c.width = c.height = 0; setInfo(''); $('camBtn').disabled = false; }
+    if (r.trx) return { r, data };
+    last = data;
+  }
+  return { r: null, data: last };
 }
 
-function toggleAdmin() {
-  const open = $('adminPanel').classList.contains('hidden');
-  $('adminPanel').classList.toggle('hidden', !open); $('flow').classList.toggle('hidden', open);
-  $('adminBtn').textContent = open ? 'Kembali ke Form' : 'Kelola User';
-  if (open) loadUsers();
+async function snap() {
+  if (!stream || ocrBusy) return;
+  ocrBusy = true; $('camBtn').disabled = true; $('snapBtn').disabled = true;
+  if (navigator.vibrate) navigator.vibrate(60);
+  setStatus('Tahan diam sebentar...');
+  let frames = [];
+  try {
+    frames = await captureFrames();
+    closeScanner();
+    if (!frames.length) return toast('Kamera belum siap, coba lagi.', false);
+    frames.forEach(preprocess);
+    setInfo('Gambar diambil, struk boleh diturunkan. Menyiapkan OCR...');
+    await prepareOCR();
+
+    // 1) frame tertajam: cari Trx Id / No PB, coba tiap arah putar sampai ketemu
+    const angles = [0, -90, 90, 180];
+    let first = null, ang = 0;
+    for (let i = 0; i < angles.length; i++) {
+      ocrTry = i ? ' (percobaan ' + (i + 1) + '/' + angles.length + ')' : '';
+      setInfo('Membaca struk' + ocrTry + '... 0%');
+      const src = rotateCanvas(frames[0], angles[i]);
+      const res = await readOne(src, i === 0);
+      if (src !== frames[0]) src.width = src.height = 0;
+      if (res.r) { first = res.r; ang = angles[i]; break; }
+      if (i === 0 && res.data && res.data.confidence >= 75 && String(res.data.text).replace(/\s/g, '').length > 120) break;
+    }
+    if (!first) return toast('Trx Id / No PB tidak terbaca. Dekatkan baris "Trx Id" atau "No PB" ke kotak hijau, pastikan fokus dan terang. Atau ketik manual.', false, 8000);
+
+    // 2) konfirmasi: frame tertajam kedua harus membaca angka yang sama
+    let second = null;
+    if (frames[1]) {
+      ocrTry = ' (konfirmasi)'; setInfo('Memastikan angka... 0%');
+      const src = rotateCanvas(frames[1], ang);
+      second = (await readOne(src, true)).r;
+      if (src !== frames[1]) src.width = src.height = 0;
+    }
+
+    $('trxId').value = first.trx;
+    beep();
+    const from = first.pb ? 'No PB' : 'Trx Id';
+    if (first.conflict) {
+      toast('Trx Id (' + first.trxLabel + ') dan No PB (' + first.pb + ') terbaca berbeda. Periksa manual lalu tambahkan.', false, 9000);
+      $('trxId').focus(); return;
+    }
+    if (second && second.trx !== first.trx) {
+      toast('Dua pembacaan berbeda (' + first.trx + ' dan ' + second.trx + '). Periksa manual lalu tambahkan.', false, 9000);
+      $('trxId').focus(); return;
+    }
+    if (!first.sure) {
+      toast('Angka terbaca kurang pasti (' + first.trx + '). Periksa dulu sebelum ditambahkan.', false, 7000);
+      $('trxId').focus(); return;
+    }
+    const confirmed = (second && second.trx === first.trx) || (first.pb && first.trxLabel && first.pb === first.trxLabel);
+    if (confirmed) {
+      toast('Terbaca dari ' + from + ' dan terkonfirmasi 2 kali. Periksa lalu tambahkan.', true, 4000);
+      if ($('autoSave').checked) addStruk(); else $('trxId').focus();
+    } else {
+      toast('Terbaca dari ' + from + ' (baru 1 kali). Periksa angkanya lalu tekan Tambah.', true, 6000);
+      $('trxId').focus();
+    }
+  } catch (e) { toast(e.message || 'Gagal membaca struk.', false, 6000); }
+  finally {
+    closeScanner(); ocrBusy = false; ocrTry = '';
+    frames.forEach(f => { f.width = f.height = 0; });
+    setInfo(''); $('camBtn').disabled = false; $('snapBtn').disabled = false;
+  }
 }
+
+function showView(v) {
+  $('flow').classList.toggle('hidden', v !== 'flow');
+  $('adminPanel').classList.toggle('hidden', v !== 'admin');
+  $('loyaltyPanel').classList.toggle('hidden', v !== 'loyalty');
+  $('adminBtn').textContent = v === 'admin' ? 'Kembali ke Form' : 'Kelola User';
+  $('loyBtn').textContent = v === 'loyalty' ? 'Kembali ke Form' : '🎁 Loyalty';
+  if (v === 'admin') { loadUsers(); loadKend(); }
+  if (v === 'loyalty') loadLoyalty();
+}
+function toggleAdmin() { showView($('adminPanel').classList.contains('hidden') ? 'admin' : 'flow'); }
+function toggleLoyalty() { showView($('loyaltyPanel').classList.contains('hidden') ? 'loyalty' : 'flow'); }
+
+let loyData = [];
+function loadLoyalty() {
+  $('loyList').innerHTML = '<div class="text-sm text-gray-500">Memuat...</div>';
+  run().withSuccessHandler(list => { loyData = list || []; renderLoyalty(); }).loyaltyList(U, P);
+}
+function renderLoyalty() {
+  const q = $('loySearch').value.trim().toLowerCase(), f = $('loyFilter').value;
+  const pending = loyData.filter(m => !m.done).length;
+  $('loyCount').textContent = '(' + (loyData.length - pending) + ' sudah, ' + pending + ' belum, dari ' + loyData.length + ' member)';
+  const rows = loyData.filter(m =>
+    (f === 'semua' || (f === 'sudah') === m.done) &&
+    (!q || (m.kode + ' ' + m.nama).toLowerCase().includes(q)));
+  if (!rows.length) { $('loyList').innerHTML = '<div class="text-sm text-gray-500">Tidak ada data.</div>'; return; }
+  $('loyList').innerHTML = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-100 text-left">' +
+    '<th class="p-2 border">Kode member</th><th class="p-2 border">Nama member</th><th class="p-2 border text-center">Hadiah</th></tr></thead><tbody>' +
+    rows.map(m => '<tr class="' + (m.done ? 'bg-green-50' : 'bg-amber-50') + '"><td class="p-2 border font-mono align-top">' + esc(m.kode) +
+      '</td><td class="p-2 border align-top">' + esc(m.nama) +
+      '</td><td class="p-2 border text-center align-top">' +
+      (m.done
+        ? '<div class="text-green-700 font-semibold whitespace-nowrap">✔ Diberikan</div>' +
+          (m.trx ? '<div class="text-[11px] text-gray-600 font-mono">Trx ' + esc(m.trx) + '</div>' +
+                   '<div class="text-[11px] text-gray-500">' + (m.idAntar ? 'ID ' + esc(m.idAntar) + ' • ' : '') + esc(m.tgl) + '</div>' : '')
+        : '<div class="text-amber-700">Belum</div><label class="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer"><input type="checkbox" class="w-3 h-3" onchange="manualDone(' + loyData.indexOf(m) + ', this)">serah manual</label>') + '</td></tr>').join('') +
+    '</tbody></table></div>';
+}
+function manualDone(i, el) {
+  const m = loyData[i];
+  if (!m) { el.checked = false; return; }
+  if (!confirm('Tandai hadiah ' + m.nama + ' (' + m.kode + ') sudah diserahkan secara manual?\n\nTanda ini tidak bisa dibatalkan dari aplikasi.')) { el.checked = false; return; }
+  el.disabled = true;
+  google.script.run
+    .withSuccessHandler(r => { toast(r.message, r.success, 4000); loadLoyalty(); })
+    .withFailureHandler(err => { el.checked = false; el.disabled = false; toast(err.message || err, false, 6000); })
+    .loyaltyManual(U, P, m.kode);
+}
+function loadKend() {
+  run().withSuccessHandler(list => {
+    applyKend(list);
+    const items = BASE_KEND.map(k => ({ ...k, locked: true, base: true })).concat((list || []).map(k => ({ ...k })));
+    renderList('kendList', items, k => k.plat + ' - ' + k.jenis + (k.base ? ' (bawaan)' : ''),
+      k => confirm('Hapus kendaraan "' + k.plat + ' - ' + k.jenis + '"?') && actKend('kendaraanDelete', [k.plat, k.jenis]));
+  }).kendaraanList(U, P);
+}
+function actKend(fn, args, after) {
+  run().withSuccessHandler(r => { toast(r.message, r.success); if (r.success) { if (after) after(); loadKend(); } })[fn](U, P, ...args);
+}
+function tambahKendaraan() {
+  actKend('kendaraanAdd', [{ plat: $('kPlat').value, jenis: $('kJenis').value }], () => ['kPlat', 'kJenis'].forEach(i => $(i).value = ''));
+}
+$('loySearch').addEventListener('input', renderLoyalty);
+$('loyFilter').addEventListener('change', renderLoyalty);
 function renderList(id, items, text, del) {
   const box = $(id); box.innerHTML = '';
   if (!items.length) { box.textContent = 'Belum ada data.'; box.className = 'text-sm text-gray-500'; return; }
