@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sistem Pencatatan Logistik</title>
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Versi Tailwind dikunci agar tampilan tidak berubah sendiri saat CDN merilis versi baru -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.1"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-start sm:items-center justify-center p-3">
 
@@ -25,31 +26,15 @@
     <div class="flex items-center gap-2 flex-wrap justify-end">
       <span id="counter" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-semibold">0 struk</span>
       <span id="loggedUser" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"></span>
-      <button id="loyBtn" onclick="toggleLoyalty()" class="text-xs bg-amber-500 text-white px-2 py-1 rounded">🎁 Loyalty</button>
       <button id="adminBtn" onclick="toggleAdmin()" class="hidden text-xs bg-purple-600 text-white px-2 py-1 rounded">Kelola User</button>
       <button onclick="location.reload()" class="text-xs text-gray-500 underline">Keluar</button>
     </div>
   </div>
 
-  <div id="loyaltyPanel" class="hidden space-y-3">
-    <div class="flex justify-between items-center">
-      <div class="text-sm font-semibold text-gray-700">Member Loyalty <span id="loyCount" class="text-xs font-normal text-gray-500"></span></div>
-      <button onclick="loadLoyalty()" class="text-xs text-blue-600 underline">Muat ulang</button>
-    </div>
-    <input id="loySearch" placeholder="Cari kode / nama member" class="w-full p-3 border rounded-lg text-sm">
-    <select id="loyFilter" class="w-full p-3 border rounded-lg bg-white text-sm">
-      <option value="semua">Semua</option>
-      <option value="belum">Belum diberikan</option>
-      <option value="sudah">Sudah diberikan</option>
-    </select>
-    <p class="text-xs text-gray-500">Centang (✔ Diberikan) terisi otomatis saat struk member diupload, lengkap dengan Trx hadiah, ID pengantaran, dan tanggal antar (juga tersimpan di sheet loyalty kolom F-H). Member yang sudah dicentang tidak akan memunculkan peringatan lagi.</p>
-    <div id="loyList" class="space-y-2 max-h-[60vh] overflow-y-auto"></div>
-  </div>
-
   <div id="adminPanel" class="hidden space-y-3">
     <div class="text-sm font-semibold text-gray-700">Kelola User</div>
     <input id="aUser" autocapitalize="none" placeholder="Username" class="w-full p-3 border rounded-lg">
-    <input id="aPass" placeholder="Password" class="w-full p-3 border rounded-lg">
+    <input id="aPass" type="password" autocomplete="new-password" placeholder="Password" class="w-full p-3 border rounded-lg">
     <input id="aNama" placeholder="Nama (opsional)" class="w-full p-3 border rounded-lg">
     <button onclick="tambahUserBaru()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold">Tambah User</button>
     <div id="userList"></div>
@@ -146,7 +131,8 @@
 
 <script>
 // ====== GANTI DENGAN URL WEB APP APPS SCRIPT BARU ANDA ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbyTry4iy67fRmJMTvNPq-zoLBBzS03KR5pP9CO6ibmNwq4-80IM9Ve2rWKgGTcydXFy6Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzRCwgawTU3IyNwVQFteT18-tSylXhWMFk-tLSgvkrfjv_XMwSNw1L79bV8Uto40aXV/exec';
+const VERSI_MIN = 16;   // harus sama dengan VERSI di Config.gs
 
 const KURIR = [
   'Kristian',
@@ -187,7 +173,7 @@ function makeRunner(ok = () => {}, fail = () => {}) {
   const set = (t, c) => { el.textContent = t; el.className = 'text-xs text-center ' + c; };
   if (API_URL.indexOf('script.google.com') < 0) return set('⚠ API_URL di index.html belum diisi URL /exec', 'text-red-600');
   fetch(API_URL).then(r => r.text()).then(t => {
-    const j = JSON.parse(t), ok = Number(j.versi) >= 15;
+    const j = JSON.parse(t), ok = Number(j.versi) >= VERSI_MIN;
     set('● Server terhubung ' + (j.versi ? '(kode v' + j.versi + ')' : '') + (ok ? '' : ' - kode LAMA: deploy ulang dengan New version'), ok ? 'text-green-600' : 'text-amber-600');
   }).catch(() => set('⚠ Server tidak terhubung. Cek URL /exec dan deployment (akses: Anyone).', 'text-red-600'));
 })();
@@ -400,7 +386,7 @@ async function uploadAll() {
   const gk = Object.keys(gifts);
   if (gk.length && !confirm('🎁 PENGINGAT HADIAH LOYALTY\n\nAda ' + gk.length + ' member yang mempunyai hadiah di daftar ini:\n' +
       gk.map(k => '• ' + gifts[k] + ' (' + k + ')').join('\n') +
-      '\n\nPastikan hadiah ikut diantar. Setelah upload, member ditandai otomatis di tab Loyalty.\n\nLanjut upload?')) return;
+      '\n\nPastikan hadiah ikut diantar. Status hadiah TIDAK ditandai otomatis oleh aplikasi.\n\nLanjut upload?')) return;
   saving = true; const btn = $('uploadBtn'); btn.disabled = true; btn.textContent = 'Mengupload...';
   const t = trip; t.kurir = nk($('kurir').value);
   try {
@@ -414,7 +400,15 @@ async function uploadAll() {
     if (!r.success) return toast(r.message, false, 6000);
     total += r.count;
     resetTrip(); $('counter').textContent = total + ' struk';
-    toast(r.message, true, 5000);
+    toast(r.message, !/Peringatan:/.test(r.message), 7000);
+    // Hadiah yang terdeteksi server tapi belum diingatkan sebelumnya (mis. cek saat tambah struk gagal)
+    const baru = (r.loyalty || []).filter(g => !gifts[g.kode]);
+    if (baru.length) {
+      beep();
+      alert('🎁 HADIAH LOYALTY!\n\nStruk yang baru diupload termasuk milik member berhadiah:\n' +
+        baru.map(g => '• ' + g.nama + ' (' + g.kode + ') - Trx ' + g.trx).join('\n') +
+        '\n\nMohon pastikan hadiahnya diserahkan.');
+    }
   } catch (e) { toast(e.message || e, false, 6000); }
   finally { saving = false; if (trip) renderTrip(); }
 }
@@ -703,50 +697,11 @@ async function snap() {
 function showView(v) {
   $('flow').classList.toggle('hidden', v !== 'flow');
   $('adminPanel').classList.toggle('hidden', v !== 'admin');
-  $('loyaltyPanel').classList.toggle('hidden', v !== 'loyalty');
   $('adminBtn').textContent = v === 'admin' ? 'Kembali ke Form' : 'Kelola User';
-  $('loyBtn').textContent = v === 'loyalty' ? 'Kembali ke Form' : '🎁 Loyalty';
   if (v === 'admin') { loadUsers(); loadKend(); }
-  if (v === 'loyalty') loadLoyalty();
 }
 function toggleAdmin() { showView($('adminPanel').classList.contains('hidden') ? 'admin' : 'flow'); }
-function toggleLoyalty() { showView($('loyaltyPanel').classList.contains('hidden') ? 'loyalty' : 'flow'); }
 
-let loyData = [];
-function loadLoyalty() {
-  $('loyList').innerHTML = '<div class="text-sm text-gray-500">Memuat...</div>';
-  run().withSuccessHandler(list => { loyData = list || []; renderLoyalty(); }).loyaltyList(U, P);
-}
-function renderLoyalty() {
-  const q = $('loySearch').value.trim().toLowerCase(), f = $('loyFilter').value;
-  const pending = loyData.filter(m => !m.done).length;
-  $('loyCount').textContent = '(' + (loyData.length - pending) + ' sudah, ' + pending + ' belum, dari ' + loyData.length + ' member)';
-  const rows = loyData.filter(m =>
-    (f === 'semua' || (f === 'sudah') === m.done) &&
-    (!q || (m.kode + ' ' + m.nama).toLowerCase().includes(q)));
-  if (!rows.length) { $('loyList').innerHTML = '<div class="text-sm text-gray-500">Tidak ada data.</div>'; return; }
-  $('loyList').innerHTML = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-100 text-left">' +
-    '<th class="p-2 border">Kode member</th><th class="p-2 border">Nama member</th><th class="p-2 border text-center">Hadiah</th></tr></thead><tbody>' +
-    rows.map(m => '<tr class="' + (m.done ? 'bg-green-50' : 'bg-amber-50') + '"><td class="p-2 border font-mono align-top">' + esc(m.kode) +
-      '</td><td class="p-2 border align-top">' + esc(m.nama) +
-      '</td><td class="p-2 border text-center align-top">' +
-      (m.done
-        ? '<div class="text-green-700 font-semibold whitespace-nowrap">✔ Diberikan</div>' +
-          (m.trx ? '<div class="text-[11px] text-gray-600 font-mono">Trx ' + esc(m.trx) + '</div>' +
-                   '<div class="text-[11px] text-gray-500">' + (m.idAntar ? 'ID ' + esc(m.idAntar) + ' • ' : '') + esc(m.tgl) + '</div>' : '')
-        : '<div class="text-amber-700">Belum</div><label class="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer"><input type="checkbox" class="w-3 h-3" onchange="manualDone(' + loyData.indexOf(m) + ', this)">serah manual</label>') + '</td></tr>').join('') +
-    '</tbody></table></div>';
-}
-function manualDone(i, el) {
-  const m = loyData[i];
-  if (!m) { el.checked = false; return; }
-  if (!confirm('Tandai hadiah ' + m.nama + ' (' + m.kode + ') sudah diserahkan secara manual?\n\nTanda ini tidak bisa dibatalkan dari aplikasi.')) { el.checked = false; return; }
-  el.disabled = true;
-  google.script.run
-    .withSuccessHandler(r => { toast(r.message, r.success, 4000); loadLoyalty(); })
-    .withFailureHandler(err => { el.checked = false; el.disabled = false; toast(err.message || err, false, 6000); })
-    .loyaltyManual(U, P, m.kode);
-}
 function loadKend() {
   run().withSuccessHandler(list => {
     applyKend(list);
@@ -761,8 +716,6 @@ function actKend(fn, args, after) {
 function tambahKendaraan() {
   actKend('kendaraanAdd', [{ plat: $('kPlat').value, jenis: $('kJenis').value }], () => ['kPlat', 'kJenis'].forEach(i => $(i).value = ''));
 }
-$('loySearch').addEventListener('input', renderLoyalty);
-$('loyFilter').addEventListener('change', renderLoyalty);
 function renderList(id, items, text, del) {
   const box = $(id); box.innerHTML = '';
   if (!items.length) { box.textContent = 'Belum ada data.'; box.className = 'text-sm text-gray-500'; return; }
