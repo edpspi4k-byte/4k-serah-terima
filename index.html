@@ -47,6 +47,12 @@
   </div>
 
   <div id="flow" class="space-y-4">
+    <!-- DRAFT: beberapa pengantaran (mobil) sekaligus -->
+    <div id="draftBar" class="hidden">
+      <div class="text-xs font-semibold text-gray-500 mb-1">Draft pengantaran (belum diupload) <span class="font-normal">- ketuk untuk pindah</span></div>
+      <div id="draftTabs" class="flex gap-2 overflow-x-auto pb-1"></div>
+    </div>
+
     <!-- LANGKAH 1: DATA PENGANTARAN -->
     <div id="stepData" class="space-y-3">
       <div class="text-sm font-semibold text-gray-700">1. Data Pengantaran</div>
@@ -79,7 +85,10 @@
           <div id="tripInfo" class="font-semibold"></div>
           <div id="tripId" class="text-xs text-blue-700"></div>
         </div>
-        <button onclick="newTrip()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded whitespace-nowrap">Pengantaran Baru</button>
+        <div class="flex flex-col gap-1">
+          <button onclick="newTrip()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded whitespace-nowrap">+ Mobil Lain</button>
+          <button onclick="discardTrip()" class="text-xs bg-white border border-red-300 text-red-600 px-2 py-1 rounded whitespace-nowrap">Buang Draft</button>
+        </div>
       </div>
       <div class="text-sm font-semibold text-gray-700">2. Muatan (Foto Struk)</div>
       <button id="camBtn" onclick="openScanner()" class="w-full bg-gray-800 text-white p-3 rounded-lg text-sm font-semibold disabled:opacity-60">📷 Buka Kamera & Baca Struk</button>
@@ -131,7 +140,7 @@
 
 <script>
 // ====== GANTI DENGAN URL WEB APP APPS SCRIPT BARU ANDA ======
-const API_URL = 'https://script.google.com/macros/s/AKfycbyXDep9bQTCUIX6EKAY3ErwdKa8iyo8lOt3VAuQeVyZzYf5hiDby6na03zRHoMZ9ptxnw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzRCwgawTU3IyNwVQFteT18-tSylXhWMFk-tLSgvkrfjv_XMwSNw1L79bV8Uto40aXV/exec';
 const VERSI_MIN = 16;   // harus sama dengan VERSI di Config.gs
 
 const KURIR = [
@@ -251,43 +260,89 @@ function initMaster() {
   fillKend(load('kend'));
   waktuManual = false; $('waktu').value = waktuNow();
   if (!M.kurir.length || !M.kendaraan.length) toast('Daftar kurir/kendaraan di index.html masih kosong.', false, 8000);
-  restoreDraft();
+  restoreDrafts();
 }
 
 let waktuManual = false;
 function waktuNow() { const h = new Date().getHours(); return h >= 5 && h < 11 ? 'Pagi' : h >= 11 && h < 18 ? 'Siang' : 'Malam'; }
 $('waktu').addEventListener('change', () => { waktuManual = true; });
 
-let trip = null, saving = false;
+/* ===== DRAFT GANDA =====
+   trips = semua draft pengantaran yang belum diupload (satu per mobil), trip = draft yang sedang dibuka.
+   Semua draft disimpan di perangkat ini per user, dan diupload satu per satu. */
+const MAX_DRAFT = 5;
+let trips = [], trip = null, saving = false;
+const busy = () => saving || ocrBusy || checking;
+const newId = () => 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const labelTrip = t => t.plat + ' (' + t.jenis + ')' + (t.kurir ? ' - ' + t.kurir : '');
 
 function startTrip() {
   const m = findKend($('kendaraan').value);
   if (!m) return toast('Pilih kendaraan dulu.', false);
+  if (trips.length >= MAX_DRAFT) return toast('Maksimal ' + MAX_DRAFT + ' draft. Upload atau buang salah satu dulu.', false, 5000);
+  if (m.plat !== 'SEWA' && trips.some(x => kendVal(x) === kendVal(m)) &&
+      !confirm('Kendaraan ' + m.plat + ' sudah punya draft yang belum diupload. Tetap buat draft baru?')) return;
   if (!waktuManual) $('waktu').value = waktuNow();
   store('kend', kendVal(m));
-  enterTrip({ kurir: nk($('kurir').value), plat: m.plat, jenis: m.jenis, waktu: $('waktu').value, deskripsi: '', items: [] });
+  const t = { id: newId(), kurir: nk($('kurir').value), plat: m.plat, jenis: m.jenis, waktu: $('waktu').value, deskripsi: '', items: [] };
+  trips.push(t);
+  enterTrip(t); saveDraft();
 }
 function enterTrip(t) {
   trip = t;
   ['kendaraan', 'waktu'].forEach(i => $(i).disabled = true);
+  $('kendaraan').value = kendVal(t); $('waktu').value = t.waktu;
   $('startBtn').classList.add('hidden'); $('stepQR').classList.remove('hidden');
   $('kurir').value = t.kurir || ''; $('deskripsi').value = t.deskripsi || '';
+  $('trxId').value = ''; $('pinT').checked = false;
   showInfo(); renderTrip();
 }
-function showInfo() { $('tripInfo').textContent = (trip.kurir || 'Kurir belum diisi') + ' • ' + trip.plat + ' (' + trip.jenis + ') • ' + trip.waktu; }
-function resetTrip() {
-  trip = null; clearDraft();
+function showInfo() { $('tripInfo').textContent = (trip.kurir || 'Kurir belum diisi') + ' • ' + trip.plat + ' (' + trip.jenis + ') • ' + trip.waktu; renderTabs(); }
+/* Tampilkan form kosong untuk membuat draft (mobil) baru; draft lain tetap tersimpan */
+function showForm() {
+  trip = null;
   ['kendaraan', 'waktu'].forEach(i => $(i).disabled = false);
-  if (!waktuManual) $('waktu').value = waktuNow();
+  fillKend(load('kend'));
+  waktuManual = false; $('waktu').value = waktuNow();
   $('startBtn').classList.remove('hidden'); $('stepQR').classList.add('hidden');
   $('kurir').value = ''; $('trxId').value = ''; $('pinT').checked = false; $('deskripsi').value = ''; $('qrList').innerHTML = '';
+  renderTabs();
 }
 function newTrip() {
-  if (saving || ocrBusy || checking) return toast('Tunggu proses selesai.', false);
-  if (trip && trip.items.length && !confirm('Ada ' + trip.items.length + ' struk yang belum diupload. Buang semuanya dan mulai pengantaran baru?')) return;
-  resetTrip();
+  if (busy()) return toast('Tunggu proses selesai.', false);
+  if (trips.length >= MAX_DRAFT) return toast('Maksimal ' + MAX_DRAFT + ' draft. Upload atau buang salah satu dulu.', false, 5000);
+  showForm();
+}
+function switchTrip(id) {
+  if (busy()) return toast('Tunggu proses selesai.', false);
+  const t = trips.find(x => x.id === id);
+  if (t && t !== trip) { enterTrip(t); saveDraft(); }
+}
+/* Tutup draft (setelah upload / dibuang), lalu buka draft lain jika ada */
+function closeTrip(t) {
+  trips = trips.filter(x => x !== t);
+  saveDraft();
+  if (trips.length) enterTrip(trips[trips.length - 1]); else showForm();
+}
+function discardTrip() {
+  if (!trip || busy()) return;
+  if (trip.items.length && !confirm('Buang draft ' + labelTrip(trip) + ' beserta ' + trip.items.length + ' struk yang belum diupload?')) return;
+  closeTrip(trip);
+}
+function renderTabs() {
+  const bar = $('draftBar');
+  if (!trips.length) { bar.classList.add('hidden'); $('draftTabs').innerHTML = ''; return; }
+  bar.classList.remove('hidden');
+  $('draftTabs').innerHTML = trips.map(t =>
+    '<button type="button" onclick="switchTrip(\'' + t.id + '\')" class="shrink-0 text-left text-xs px-3 py-2 rounded-lg border ' +
+    (t === trip ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300') + '">' +
+    '<div class="font-semibold whitespace-nowrap">' + esc(t.plat) + '</div>' +
+    '<div class="whitespace-nowrap opacity-80">' + esc(t.kurir || 'Kurir -') + ' • ' + t.items.length + ' struk</div></button>').join('') +
+    (trips.length < MAX_DRAFT && trip
+      ? '<button type="button" onclick="newTrip()" class="shrink-0 text-xs px-3 py-2 rounded-lg border border-dashed border-blue-400 text-blue-700 bg-white whitespace-nowrap">+ Mobil Lain</button>' : '');
 }
 function renderTrip() {
+  renderTabs();
   if (!trip) return;
   const n = trip.items.length;
   $('tripId').textContent = 'ID pengantaran dibuat otomatis saat upload';
@@ -323,25 +378,45 @@ $('kurir').addEventListener('keydown', e => { if (e.key === 'Escape') kurirMenu(
 document.addEventListener('pointerdown', e => { if (!$('kurirBox').contains(e.target)) kurirMenu(false); });
 $('deskripsi').addEventListener('input', e => { if (trip) { trip.deskripsi = e.target.value; saveDraft(); } });
 
-const draftKey = () => 'draft_' + U.trim().toLowerCase();
-function saveDraft() { if (trip && trip.items.length) store(draftKey(), JSON.stringify(trip)); else clearDraft(); }
-function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} }
-function restoreDraft() {
-  let t; try { t = JSON.parse(load(draftKey()) || 'null'); } catch (e) { t = null; }
-  if (!t || !Array.isArray(t.items) || !t.items.length) return;
+/* Penyimpanan draft di perangkat: { cur: id draft terbuka, list: [draft...] } per user */
+const draftsKey = () => 'drafts_' + U.trim().toLowerCase();
+const oldDraftKey = () => 'draft_' + U.trim().toLowerCase();   // format lama (1 draft), dimigrasi otomatis
+function saveDraft() {
+  try {
+    if (trips.length) localStorage.setItem(draftsKey(), JSON.stringify({ cur: trip ? trip.id : '', list: trips }));
+    else localStorage.removeItem(draftsKey());
+  } catch (e) {}
+  renderTabs();
+}
+function cleanTrip(t) {
+  if (!t || typeof t !== 'object' || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return null;
   let m = M.kendaraan.find(x => key(x.plat) === key(t.plat) && x.jenis === t.jenis);
   if (!m && t.plat && t.jenis) { m = { plat: norm(t.plat), jenis: String(t.jenis) }; M.kendaraan.push(m); fillKend(); }
-  if (!m || !['Pagi', 'Siang', 'Malam'].includes(t.waktu)) return clearDraft();
-  const items = t.items.filter(x => x && x.trxId).map(x => ({
+  if (!m) return null;
+  const seen = new Set();
+  const items = (Array.isArray(t.items) ? t.items : []).filter(x => x && /^\d{7}$/.test(String(x.trxId)) && !seen.has(String(x.trxId)) && seen.add(String(x.trxId))).map(x => ({
     trxId: String(x.trxId),
     pinT: !!x.pinT,
     loyalty: x.loyalty && typeof x.loyalty === 'object' ? { kode: String(x.loyalty.kode || ''), nama: String(x.loyalty.nama || ''), done: !!x.loyalty.done } : null
   }));
-  if (!items.length) return clearDraft();
-  waktuManual = true;
-  $('kendaraan').value = kendVal(m); $('waktu').value = t.waktu;
-  enterTrip({ kurir: String(t.kurir || '').slice(0, 60), plat: m.plat, jenis: m.jenis, waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items });
-  toast('Draft dipulihkan: ' + items.length + ' struk belum diupload.', true, 5000);
+  return { id: /^d[a-z0-9]+$/.test(t.id || '') ? t.id : newId(), kurir: String(t.kurir || '').slice(0, 60), plat: m.plat, jenis: m.jenis,
+           waktu: t.waktu, deskripsi: String(t.deskripsi || '').slice(0, 200), items };
+}
+function restoreDrafts() {
+  let d = null;
+  try { d = JSON.parse(load(draftsKey()) || 'null'); } catch (e) {}
+  let list = d && Array.isArray(d.list) ? d.list : [];
+  try {   // migrasi draft lama
+    const old = JSON.parse(load(oldDraftKey()) || 'null');
+    if (old && Array.isArray(old.items) && old.items.length) list.push(old);
+    localStorage.removeItem(oldDraftKey());
+  } catch (e) {}
+  trips = list.map(cleanTrip).filter(Boolean).slice(0, MAX_DRAFT);
+  if (!trips.length) { saveDraft(); return showForm(); }
+  enterTrip(trips.find(x => d && x.id === d.cur) || trips[trips.length - 1]);
+  saveDraft();
+  const n = trips.reduce((a, t) => a + t.items.length, 0);
+  toast(trips.length + ' draft dipulihkan (' + n + ' struk belum diupload).', true, 5000);
 }
 
 let checking = false;
@@ -352,6 +427,8 @@ async function addStruk() {
   if (!trxId) return toast('Trx Id belum diisi.', false);
   if (!/^\d{7}$/.test(trxId)) return toast('Trx Id tidak valid (harus persis 7 digit angka).', false, 4000);
   if (trip.items.some(x => x.trxId === trxId)) return toast('Trx Id ' + trxId + ' sudah ada di daftar.', false);
+  const lain = trips.find(x => x !== trip && x.items.some(i => i.trxId === trxId));
+  if (lain) return toast('Trx Id ' + trxId + ' sudah ada di draft mobil lain: ' + labelTrip(lain) + '.', false, 6000);
   checking = true; const btn = $('addBtn'); btn.disabled = true; btn.textContent = 'Memeriksa...';
   const t = trip; let warn = '', loy = null;
   try {
@@ -363,7 +440,7 @@ async function addStruk() {
     if (!r.found && pinT) warn = ' Trx Id belum pernah tercatat, tetap ditambahkan sebagai PIN T.';
   } catch (e) { warn = ' Pemeriksaan server gagal, akan diperiksa lagi saat upload.'; }
   finally { checking = false; btn.disabled = false; btn.textContent = '+ Tambah Struk'; }
-  if (trip !== t || t.items.some(x => x.trxId === trxId)) return;
+  if (trip !== t || !trips.includes(t) || trips.some(x => x.items.some(i => i.trxId === trxId))) return;
   t.items.push({ trxId, pinT, loyalty: loy });
   $('trxId').value = ''; $('pinT').checked = false;
   saveDraft(); renderTrip(); toast('Struk' + (pinT ? ' PIN T' : '') + ' ditambahkan (' + t.items.length + ').' + warn, !warn, warn ? 5000 : 2500);
@@ -399,8 +476,8 @@ async function uploadAll() {
     }
     if (!r.success) return toast(r.message, false, 6000);
     total += r.count;
-    resetTrip(); $('counter').textContent = total + ' struk';
-    toast(r.message, !/Peringatan:/.test(r.message), 7000);
+    closeTrip(t); $('counter').textContent = total + ' struk';
+    toast(r.message + (trips.length ? ' Masih ada ' + trips.length + ' draft lain.' : ''), !/Peringatan:/.test(r.message), 7000);
     // Hadiah yang terdeteksi server tapi belum diingatkan sebelumnya (mis. cek saat tambah struk gagal)
     const baru = (r.loyalty || []).filter(g => !gifts[g.kode]);
     if (baru.length) {
